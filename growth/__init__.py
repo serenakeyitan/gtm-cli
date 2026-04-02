@@ -1,0 +1,3 @@
+"""growth-cli — Terminal-native marketing automation."""
+
+__version__ = "0.1.0"

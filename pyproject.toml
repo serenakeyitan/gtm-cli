@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "growth-cli"
+version = "0.1.0"
+description = "Terminal-native marketing automation. Claude Code for marketers."
+readme = "README.md"
+license = {text = "BSL-1.1"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Serena Key", email = "serena@unispark.dev"},
+]
+keywords = ["marketing", "automation", "cli", "growth", "social-media"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Internet",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "click>=8.0",
+    "twikit>=2.0",
+    "playwright>=1.40",
+    "httpx>=0.25",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+]
+agents = [
+    "claude-code-sdk>=0.1",
+]
+
+[project.scripts]
+growth = "growth.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/serenakeyitan/growth-cli"
+Repository = "https://github.com/serenakeyitan/growth-cli"
+
+[tool.setuptools.packages.find]
+include = ["growth*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
