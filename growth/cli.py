@@ -383,12 +383,16 @@ def hn_top(count, json_output):
 @hn.command("submit")
 @click.option("--as", "as_identity", help="Identity to use")
 @click.option("--title", required=True, help="Submission title")
-@click.option("--url", default="", help="URL to submit")
+@click.option("--url", default="", help="URL to submit (link post)")
+@click.option("--text", default="", help="Body text (text/Ask HN post)")
 @click.option("--dry-run", is_flag=True)
 @click.option("--force", is_flag=True)
-def hn_submit(as_identity, title, url, dry_run, force):
-    """Submit to Hacker News."""
-    asyncio.run(_do_post("hn", "submit", "", as_identity, dry_run, force, False,
+def hn_submit(as_identity, title, url, text, dry_run, force):
+    """Submit to Hacker News. Provide --url for link posts, --text for text posts."""
+    if not url and not text:
+        click.echo("Error: provide --url (link post) or --text (text post)")
+        sys.exit(1)
+    asyncio.run(_do_post("hn", "submit", text, as_identity, dry_run, force, False,
                           title=title, url=url))
 
 
@@ -425,13 +429,17 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
             sys.exit(0)
 
     if dry_run:
+        extra_info = {k: v for k, v in kwargs.items() if v}
         if json_output:
-            click.echo(json.dumps({"dry_run": True, "platform": platform, "identity": identity.name, "text": text}))
+            click.echo(json.dumps({"dry_run": True, "platform": platform, "identity": identity.name, "text": text, **extra_info}))
         else:
             console.print(f"\n[dim]DRY RUN — nothing will be posted[/dim]")
             console.print(f"  Platform: {platform}")
             console.print(f"  Account:  {identity.name}")
-            console.print(f"  Content:  {text}")
+            if text:
+                console.print(f"  Content:  {text}")
+            for k, v in extra_info.items():
+                console.print(f"  {k.capitalize():10s} {v}")
         return
 
     # Execute

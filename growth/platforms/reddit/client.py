@@ -262,9 +262,12 @@ class PlaywrightRedditClient:
                     "Login appeared to succeed but session verification failed."
                 )
 
-            # Save session state.
+            # Save session state with secure permissions.
+            import stat
             self._session_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(self._session_dir, stat.S_IRWXU)  # 0700
             storage = await self._context.storage_state(path=str(self._storage_path))
+            os.chmod(self._storage_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600
             self._logged_in = True
             log.info("Logged in and saved session to %s", self._storage_path)
 

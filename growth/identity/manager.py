@@ -113,7 +113,7 @@ class IdentityManager:
             if not platform_dir.is_dir() or platform_dir.name.startswith("."):
                 continue
             for user_dir in sorted(platform_dir.iterdir()):
-                if not user_dir.is_dir():
+                if not user_dir.is_dir() or user_dir.name.startswith("_"):
                     continue
                 try:
                     identities.append(Identity.load(user_dir))

@@ -49,15 +49,16 @@ class RedditPlatform(Platform):
 
     async def health_check(self, identity_dir: Path) -> HealthStatus:
         from datetime import datetime
+        client = self._get_client(identity_dir)
         try:
-            client = self._get_client(identity_dir)
             await client.preflight()
-            await client.close()
             return HealthStatus(healthy=True, reason="Session valid",
                                 last_checked=datetime.now().isoformat())
         except Exception as e:
             return HealthStatus(healthy=False, reason=f"Session expired: {e}",
                                 last_checked=datetime.now().isoformat())
+        finally:
+            await client.close()
 
     async def post(self, identity_dir: Path, content: str, **kwargs) -> PostResult:
         """Submit a post to a subreddit."""
@@ -70,8 +71,8 @@ class RedditPlatform(Platform):
         if not title:
             return PostResult(success=False, error="--title required for Reddit posts")
 
+        client = self._get_client(identity_dir)
         try:
-            client = self._get_client(identity_dir)
             if url:
                 result = await client.submit_api_post(
                     subreddit, title, url=url, kind="link"
@@ -80,7 +81,6 @@ class RedditPlatform(Platform):
                 result = await client.submit_api_post(
                     subreddit, title, selftext=content, kind="self"
                 )
-            await client.close()
             return PostResult(
                 success=True,
                 post_id=result.get("post_id", ""),
@@ -89,6 +89,8 @@ class RedditPlatform(Platform):
             )
         except Exception as e:
             return PostResult(success=False, error=str(e))
+        finally:
+            await client.close()
 
     async def search(self, identity_dir: Path, query: str, **kwargs) -> list[SearchResult]:
         """Search Reddit via public JSON API (no auth needed)."""

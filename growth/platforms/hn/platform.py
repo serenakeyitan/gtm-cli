@@ -62,7 +62,11 @@ class HNPlatform(Platform):
                                 last_checked=datetime.now().isoformat())
 
     async def post(self, identity_dir: Path, content: str, **kwargs) -> PostResult:
-        """Submit to Hacker News."""
+        """Submit to Hacker News.
+
+        If url is provided → link post (submit_link).
+        If only title + content → text post (submit_text).
+        """
         title = kwargs.get("title", "")
         url = kwargs.get("url", "")
 
@@ -71,11 +75,14 @@ class HNPlatform(Platform):
 
         try:
             client = self._get_client(identity_dir)
-            result = await client.submit_post(url or "", title)
+            if url:
+                result = await client.submit_link(url, title)
+            else:
+                result = await client.submit_text(title, content)
             return PostResult(
                 success=True,
                 post_id=result.get("item_id", ""),
-                url=result.get("url", ""),
+                url=result.get("hn_url", ""),  # client returns hn_url, not url
                 raw=result,
             )
         except Exception as e:

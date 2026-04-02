@@ -150,10 +150,13 @@ class PlaywrightHNClient:
                         break
 
                 if user_cookie:
-                    # Save the cookie.
+                    # Save the cookie with secure permissions.
+                    import os, stat
                     self._session_dir.mkdir(parents=True, exist_ok=True)
+                    os.chmod(self._session_dir, stat.S_IRWXU)  # 0700
                     with open(self._cookie_path, "w") as f:
                         json.dump({"user_cookie": user_cookie}, f)
+                    os.chmod(self._cookie_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600
                     self._cookie = user_cookie
                     self._logged_in = True
                     log.info("HN login successful — cookie saved to %s", self._cookie_path)
