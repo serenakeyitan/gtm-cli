@@ -72,9 +72,21 @@ def ensure_dirs() -> None:
     for d in [CONFIG_DIR, IDENTITIES_DIR, RATE_LIMITS_DIR, OUTPUT_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
-    # Secure credential directories — owner-only access
+    # Secure credential directories and all contents — owner-only access
     for d in [IDENTITIES_DIR, RATE_LIMITS_DIR]:
         try:
             os.chmod(d, stat.S_IRWXU)  # 0700
-        except OSError:
-            pass  # Best effort on platforms that don't support chmod
+        except OSError as e:
+            import logging
+            logging.getLogger(__name__).warning("Cannot secure %s: %s", d, e)
+
+        # Also secure existing subdirs and files (upgrade path)
+        if d.exists():
+            for item in d.rglob("*"):
+                try:
+                    if item.is_dir():
+                        os.chmod(item, stat.S_IRWXU)  # 0700
+                    elif item.is_file():
+                        os.chmod(item, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+                except OSError:
+                    pass

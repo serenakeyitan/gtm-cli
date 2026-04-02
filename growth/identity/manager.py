@@ -65,12 +65,14 @@ class Identity:
         with open(self.identity_yaml_path, "w") as f:
             yaml.dump(asdict(self), f, default_flow_style=False)
 
-        # Secure credential files — owner-only read/write
-        for secret_file in self.identity_dir.glob("*.json"):
-            try:
-                os.chmod(secret_file, stat.S_IRUSR | stat.S_IWUSR)  # 0600
-            except OSError:
-                pass
+        # Secure ALL credential files — owner-only read/write
+        # Covers .json (cookies), .yaml, and any browser session artifacts
+        for secret_file in self.identity_dir.iterdir():
+            if secret_file.is_file():
+                try:
+                    os.chmod(secret_file, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+                except OSError as e:
+                    log.warning("Cannot secure %s: %s", secret_file, e)
 
     @classmethod
     def load(cls, identity_dir: Path) -> Identity:
