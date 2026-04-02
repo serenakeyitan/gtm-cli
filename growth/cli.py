@@ -377,7 +377,11 @@ async def _do_search(platform: str, query: str, as_identity, count: int, json_ou
     identity = mgr.resolve_as_flag(as_identity, platform)
     plat = get_platform(platform)
 
-    results = await plat.search(identity.identity_dir, query, count=count)
+    try:
+        results = await plat.search(identity.identity_dir, query, count=count)
+    except Exception as e:
+        _handle_auth_error(e, platform)
+        raise
 
     if json_output:
         click.echo(json.dumps([{"id": r.id, "text": r.text, "author": r.author, "score": r.score} for r in results]))
@@ -464,6 +468,16 @@ def _ensure_platforms_registered():
     #     import growth.platforms.hn.platform
     # except ImportError:
     #     pass
+
+
+def _handle_auth_error(error: Exception, platform: str) -> None:
+    """Catch auth/expired errors and show re-auth instructions."""
+    from growth.platforms.twitter.client import TwitterAuthError
+
+    if isinstance(error, TwitterAuthError):
+        console.print(f"\n[bold red]🔑 Session expired[/bold red]")
+        console.print(f"\n  Re-authenticate:  [bold]growth auth {platform}[/bold]\n")
+        sys.exit(1)
 
 
 def _save_identity(platform: str, username: str, metadata: dict):

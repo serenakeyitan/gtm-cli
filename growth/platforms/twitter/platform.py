@@ -56,21 +56,23 @@ class TwitterPlatform(Platform):
         }
 
     async def health_check(self, identity_dir: Path) -> HealthStatus:
-        """Verify cookies are still valid."""
+        """Verify cookies are still valid by making a lightweight API call."""
         from datetime import datetime
 
         try:
             client = self._get_client(identity_dir)
             await client.preflight()
+            # Try a lightweight call to verify cookies aren't expired
+            await client.search("test", count=1)
             return HealthStatus(
                 healthy=True,
                 reason="Cookies valid",
                 last_checked=datetime.now().isoformat(),
             )
-        except TwitterAuthError as e:
+        except (TwitterAuthError, TwitterClientError) as e:
             return HealthStatus(
                 healthy=False,
-                reason=str(e),
+                reason=f"Cookies expired or invalid: {e}",
                 last_checked=datetime.now().isoformat(),
             )
 
@@ -88,6 +90,7 @@ class TwitterPlatform(Platform):
                 raw=result,
             )
         except TwitterClientError as e:
+            _raise_if_expired(e, identity_dir)
             return PostResult(success=False, error=str(e))
 
     async def search(self, identity_dir: Path, query: str, **kwargs) -> list[SearchResult]:
@@ -108,6 +111,7 @@ class TwitterPlatform(Platform):
                 for t in tweets
             ]
         except TwitterClientError as e:
+            _raise_if_expired(e, identity_dir)
             log.error("Twitter search failed: %s", e)
             return []
 
@@ -123,6 +127,7 @@ class TwitterPlatform(Platform):
                 return EngageResult(success=False, error=f"Unknown action: {action}")
             return EngageResult(success=True)
         except TwitterClientError as e:
+            _raise_if_expired(e, identity_dir)
             return EngageResult(success=False, error=str(e))
 
     async def reply(self, identity_dir: Path, target_id: str, content: str, **kwargs) -> PostResult:
@@ -133,7 +138,21 @@ class TwitterPlatform(Platform):
             tweet_id = result.get("id", "")
             return PostResult(success=True, post_id=str(tweet_id), raw=result)
         except TwitterClientError as e:
+            _raise_if_expired(e, identity_dir)
             return PostResult(success=False, error=str(e))
+
+
+def _raise_if_expired(error: Exception, identity_dir: Path) -> None:
+    """Detect expired cookies and raise a clear auth error with re-auth instructions."""
+    err_str = str(error).lower()
+    expired_signals = ["401", "403", "404", "unauthorized", "forbidden", "auth"]
+    if any(sig in err_str for sig in expired_signals):
+        username = identity_dir.name
+        raise TwitterAuthError(
+            f"Twitter session expired for '{username}'.\n"
+            f"\n"
+            f"  Re-authenticate:  growth auth twitter\n"
+        )
 
 
 # Register on import
