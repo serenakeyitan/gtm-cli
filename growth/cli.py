@@ -116,13 +116,15 @@ def init():
 @click.argument("platform", type=click.Choice(["twitter", "reddit", "hn"]))
 @click.option("--username", "-u", help="Username for the account")
 @click.option("--email", "-e", help="Email (Twitter only)")
-def auth(platform, username, email):
+@click.option("--stdin", "use_stdin", is_flag=True, hidden=True,
+              help="Read credentials from stdin (for agent/non-interactive use)")
+def auth(platform, username, email, use_stdin):
     """Connect a platform account.
 
-    Credentials are prompted interactively (never passed as CLI args)
-    to avoid leaking in shell history or process lists.
+    Credentials are prompted interactively by default.
+    Use --stdin for non-interactive/agent flows (pipe credentials securely).
     """
-    password = None  # Always prompt, never accept as CLI arg
+    password = None
     ensure_dirs()
 
     # Import platform adapters to register them
@@ -132,32 +134,43 @@ def auth(platform, username, email):
     plat = get_platform(platform)
 
     if platform == "twitter":
-        # Twitter: terminal prompts for username/email/password
         if not username:
-            username = click.prompt("Twitter username")
-        if not email:
-            email = click.prompt("Twitter email")
-        if not password:
-            password = click.prompt("Twitter password", hide_input=True)
+            username = click.prompt("Twitter username (without @)")
 
         identity_dir = IDENTITIES_DIR / "twitter" / username
-        console.print(f"\nLogging in as @{username}...")
 
-        try:
-            metadata = asyncio.run(
-                plat.auth_interactive(
-                    identity_dir,
-                    username=username,
-                    email=email,
-                    password=password,
+        if use_stdin:
+            # Agent/non-interactive: read email + password from stdin
+            import sys as _sys
+            lines = _sys.stdin.read().strip().split("\n")
+            email = email or (lines[0] if len(lines) > 0 else None)
+            password = lines[1] if len(lines) > 1 else None
+            console.print(f"\n  Logging in as @{username}...")
+            try:
+                metadata = asyncio.run(
+                    plat.auth_interactive(
+                        identity_dir, username=username, email=email, password=password,
+                    )
                 )
-            )
-            _save_identity(platform, username, metadata)
-            console.print(f"[green]✅ Logged in! Cookies saved.[/green]")
-            console.print(f"   Identity: [bold]twitter:{username}[/bold]")
-        except Exception as e:
-            console.print(f"[red]❌ Login failed: {e}[/red]")
-            sys.exit(1)
+                _save_identity(platform, username, metadata)
+                console.print(f"  [green]✅ Logged in![/green]")
+            except Exception as e:
+                console.print(f"  [red]❌ Login failed: {e}[/red]")
+                sys.exit(1)
+            return
+
+        # Interactive flow: try browser first → fall back to cookie paste
+        console.print(f"\n  Connecting Twitter account [bold]@{username}[/bold]")
+
+        # Step 1: Try opening browser (smoothest — auto-grabs cookies)
+        console.print("  Attempting to open Chrome...")
+        if _auth_twitter_browser(username, identity_dir):
+            return  # Success!
+
+        # Step 2: Browser didn't work — fall back to cookie paste
+        console.print("  [yellow]Chrome not available or timed out.[/yellow]")
+        console.print("  No worries — let's grab cookies manually instead.\n")
+        _auth_twitter_paste(username, identity_dir)
 
     elif platform in ("reddit", "hn"):
         # Reddit & HN: browser-based manual login
@@ -468,6 +481,148 @@ def _ensure_platforms_registered():
     #     import growth.platforms.hn.platform
     # except ImportError:
     #     pass
+
+
+def _auth_twitter_browser(username: str, identity_dir: Path) -> bool:
+    """Try to grab Twitter cookies by opening Chrome via Playwright.
+
+    Opens your real Chrome browser to x.com. If you're already logged in,
+    cookies are captured automatically. If not, log in manually.
+    Returns True on success, False if Playwright is unavailable.
+    """
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return False
+
+    async def _grab():
+        console.print("\n  Opening Chrome to x.com...")
+        console.print("  If you're already logged in, cookies will be captured automatically.")
+        console.print("  Otherwise, log in manually in the browser window.\n")
+
+        pw = await async_playwright().start()
+        try:
+            browser = await pw.chromium.launch(channel="chrome", headless=False)
+        except Exception:
+            await pw.stop()
+            return False
+
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto("https://x.com/home", wait_until="domcontentloaded")
+
+        # Poll for login (up to 3 minutes)
+        for _ in range(60):
+            await __import__("asyncio").sleep(3)
+            cookies = await context.cookies("https://x.com")
+            cookie_dict = {c["name"]: c["value"] for c in cookies}
+            if "auth_token" in cookie_dict and "ct0" in cookie_dict:
+                _save_cookies(username, identity_dir, cookie_dict)
+                await browser.close()
+                await pw.stop()
+                return True
+
+        console.print("[yellow]  Timed out waiting for login.[/yellow]")
+        await browser.close()
+        await pw.stop()
+        return False
+
+    return asyncio.run(_grab())
+
+
+COOKIE_EDITOR_EXTENSION = "https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm"
+
+
+def _auth_twitter_paste(username: str, identity_dir: Path) -> None:
+    """Auth Twitter by pasting cookies. Supports multiple formats:
+    1. Cookie-Editor JSON export (recommended — one click)
+    2. document.cookie string
+    3. Manual auth_token + ct0 values
+    """
+    console.print(f"""
+  [bold cyan]Grab your Twitter cookies (30 seconds):[/bold cyan]
+
+  [bold]Easiest — Cookie-Editor extension (recommended):[/bold]
+    1. Install Cookie-Editor: [link={COOKIE_EDITOR_EXTENSION}]{COOKIE_EDITOR_EXTENSION}[/link]
+    2. Go to [bold]x.com[/bold] (make sure you're logged in)
+    3. Click the Cookie-Editor icon → [bold]Export[/bold] (copies JSON to clipboard)
+    4. Paste below
+
+  [bold]Alternative — browser console:[/bold]
+    1. Go to [bold]x.com[/bold] → open console ([bold]Cmd+Option+J[/bold])
+    2. Type [bold]allow pasting[/bold] then Enter
+    3. Type [bold]document.cookie[/bold] then Enter
+    4. Copy the output and paste below
+""")
+
+    raw = click.prompt("  Paste cookies").strip()
+
+    if not raw:
+        console.print("[red]  ❌ No cookies pasted.[/red]")
+        sys.exit(1)
+
+    cookie_dict = _parse_cookies(raw)
+
+    if "auth_token" not in cookie_dict or "ct0" not in cookie_dict:
+        console.print("[yellow]  Couldn't find auth_token/ct0 in the paste.[/yellow]")
+        console.print("  Let's enter them manually:\n")
+        console.print("  In Chrome: [bold]Cmd+Option+I[/bold] → [bold]Application[/bold] tab → [bold]Cookies[/bold] → [bold]https://x.com[/bold]")
+        console.print("  Find [bold]auth_token[/bold] and [bold]ct0[/bold], copy each Value:\n")
+        auth_token = click.prompt("  auth_token").strip()
+        ct0 = click.prompt("  ct0").strip()
+        if not auth_token or not ct0:
+            console.print("[red]  ❌ Both auth_token and ct0 are required.[/red]")
+            sys.exit(1)
+        cookie_dict = {"auth_token": auth_token, "ct0": ct0}
+
+    _save_cookies(username, identity_dir, cookie_dict)
+
+
+def _parse_cookies(raw: str) -> dict[str, str]:
+    """Parse cookies from multiple formats:
+    - Cookie-Editor JSON export: [{"name": "x", "value": "y"}, ...]
+    - document.cookie string: "key1=val1; key2=val2; ..."
+    """
+    raw = raw.strip()
+
+    # Try Cookie-Editor JSON format first
+    if raw.startswith("["):
+        try:
+            cookies_list = json.loads(raw)
+            return {c["name"]: c["value"] for c in cookies_list if "name" in c and "value" in c}
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Try document.cookie string format
+    cookie_dict = {}
+    for pair in raw.replace('"', "").split(";"):
+        pair = pair.strip()
+        if "=" in pair:
+            key, _, val = pair.partition("=")
+            cookie_dict[key.strip()] = val.strip()
+
+    return cookie_dict
+
+
+def _save_cookies(username: str, identity_dir: Path, cookie_dict: dict) -> None:
+    """Save cookies to disk with secure permissions."""
+    import os
+    import stat
+
+    identity_dir.mkdir(parents=True, exist_ok=True)
+    cookie_path = identity_dir / "cookies.json"
+
+    import json as _json
+    with open(cookie_path, "w") as f:
+        _json.dump(cookie_dict, f, indent=2)
+
+    os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+    os.chmod(identity_dir, stat.S_IRWXU)  # 0700
+
+    _save_identity("twitter", username, {"auth_method": "cookies_manual"})
+    console.print(f"\n  [green]✅ Cookies saved![/green]")
+    console.print(f"     Identity: [bold]twitter:{username}[/bold]")
+    console.print(f"\n     Test it: [bold]growth twitter search 'AI agents' --count 3[/bold]")
 
 
 def _handle_auth_error(error: Exception, platform: str) -> None:

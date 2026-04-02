@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.0",
-    "twikit>=2.0",
+    "twikit @ git+https://codeberg.org/phin/twikit",
     "playwright>=1.40",
     "httpx>=0.25",
     "pyyaml>=6.0",
