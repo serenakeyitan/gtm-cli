@@ -321,10 +321,81 @@ def twitter_reply(tweet_id, text, as_identity, dry_run, force):
     asyncio.run(_do_reply("twitter", tweet_id, text, as_identity, dry_run, force))
 
 
+# ── Reddit Commands ────────────────────────────────────────────────────
+
+
+@main.group()
+def reddit():
+    """Reddit commands."""
+    _ensure_platforms_registered()
+
+
+@reddit.command("search")
+@click.argument("query")
+@click.option("--sub", help="Search within a subreddit")
+@click.option("--count", default=10, help="Number of results")
+@click.option("--json", "json_output", is_flag=True)
+def reddit_search(query, sub, count, json_output):
+    """Search Reddit."""
+    asyncio.run(_do_search_generic("reddit", query, None, count, json_output, subreddit=sub))
+
+
+@reddit.command("submit")
+@click.option("--as", "as_identity", help="Identity to use")
+@click.option("--sub", required=True, help="Subreddit to post in")
+@click.option("--title", required=True, help="Post title")
+@click.option("--body", default="", help="Post body text")
+@click.option("--url", default="", help="Link URL (for link posts)")
+@click.option("--dry-run", is_flag=True)
+@click.option("--force", is_flag=True)
+def reddit_submit(as_identity, sub, title, body, url, dry_run, force):
+    """Submit a post to a subreddit."""
+    asyncio.run(_do_post("reddit", "post", body, as_identity, dry_run, force, False,
+                          subreddit=sub, title=title, url=url))
+
+
+# ── HN Commands ───────────────────────────────────────────────────────
+
+
+@main.group()
+def hn():
+    """Hacker News commands."""
+    _ensure_platforms_registered()
+
+
+@hn.command("search")
+@click.argument("query")
+@click.option("--count", default=10, help="Number of results")
+@click.option("--json", "json_output", is_flag=True)
+def hn_search(query, count, json_output):
+    """Search Hacker News (via Algolia)."""
+    asyncio.run(_do_search_generic("hn", query, None, count, json_output))
+
+
+@hn.command("top")
+@click.option("--count", default=15, help="Number of stories")
+@click.option("--json", "json_output", is_flag=True)
+def hn_top(count, json_output):
+    """Show current HN front page stories."""
+    asyncio.run(_do_trending("hn", count, json_output))
+
+
+@hn.command("submit")
+@click.option("--as", "as_identity", help="Identity to use")
+@click.option("--title", required=True, help="Submission title")
+@click.option("--url", default="", help="URL to submit")
+@click.option("--dry-run", is_flag=True)
+@click.option("--force", is_flag=True)
+def hn_submit(as_identity, title, url, dry_run, force):
+    """Submit to Hacker News."""
+    asyncio.run(_do_post("hn", "submit", "", as_identity, dry_run, force, False,
+                          title=title, url=url))
+
+
 # ── Shared Action Helpers ─────────────────────────────────────────────
 
 
-async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, force, json_output):
+async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, force, json_output, **kwargs):
     """Generic post action with rate limiting and safety checks."""
     from growth.identity.manager import IdentityManager
     from growth.platforms.base import get_platform
@@ -364,7 +435,7 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         return
 
     # Execute
-    result = await plat.post(identity.identity_dir, text)
+    result = await plat.post(identity.identity_dir, text, **kwargs)
 
     if result.success:
         limiter.record(identity.name, action)
@@ -423,6 +494,70 @@ async def _do_user_tweets(platform: str, username: str, as_identity, count: int,
             console.print(f"  [dim]{date}[/dim]")
             console.print(f"  {text[:280]}")
             console.print(f"  [dim]❤️ {likes}  🔁 {rts}[/dim]\n")
+
+
+async def _do_search_generic(platform: str, query: str, as_identity, count: int, json_output: bool, **kwargs):
+    """Generic search that works without auth (uses public APIs for Reddit/HN)."""
+    from growth.platforms.base import get_platform
+
+    plat = get_platform(platform)
+
+    # Reddit/HN search doesn't need auth — uses public APIs
+    # Use a dummy identity_dir (won't be accessed for search)
+    from growth.config import IDENTITIES_DIR
+    dummy_dir = IDENTITIES_DIR / platform / "_search"
+    dummy_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        results = await plat.search(dummy_dir, query, count=count, **kwargs)
+    except Exception as e:
+        console.print(f"[red]❌ Search failed: {e}[/red]")
+        sys.exit(1)
+
+    if json_output:
+        click.echo(json.dumps([{"id": r.id, "title": r.title, "url": r.url, "author": r.author, "score": r.score} for r in results], indent=2))
+    else:
+        if not results:
+            console.print("No results found.")
+            return
+        for r in results:
+            score = f"[bold]{r.score}[/bold]" if r.score else "0"
+            title = r.title or r.text[:120]
+            console.print(f"  [{score}] {title}")
+            if r.author:
+                console.print(f"       [dim]by {r.author}[/dim]", end="")
+            if r.url:
+                console.print(f"  [dim]{r.url[:80]}[/dim]")
+            else:
+                console.print()
+
+
+async def _do_trending(platform: str, count: int, json_output: bool):
+    """Fetch trending/top content from a platform."""
+    from growth.platforms.base import get_platform
+    from growth.config import IDENTITIES_DIR
+
+    plat = get_platform(platform)
+    dummy_dir = IDENTITIES_DIR / platform / "_search"
+    dummy_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        results = await plat.trending(dummy_dir, count=count)
+    except Exception as e:
+        console.print(f"[red]❌ Failed: {e}[/red]")
+        sys.exit(1)
+
+    if json_output:
+        click.echo(json.dumps([{"id": r.id, "title": r.title, "url": r.url, "score": r.score} for r in results], indent=2))
+    else:
+        if not results:
+            console.print("No results found.")
+            return
+        console.print(f"\n  [bold]Top {len(results)} stories:[/bold]\n")
+        for i, r in enumerate(results, 1):
+            console.print(f"  {i:2}. [{r.score}] {r.title}")
+            if r.url:
+                console.print(f"       [dim]{r.url[:80]}[/dim]")
 
 
 async def _do_search(platform: str, query: str, as_identity, count: int, json_output: bool):
@@ -515,16 +650,15 @@ async def _do_reply(platform: str, target_id: str, text: str, as_identity, dry_r
 
 def _ensure_platforms_registered():
     """Import platform modules to trigger registration."""
-    try:
-        import growth.platforms.twitter.platform  # noqa: F401
-    except ImportError:
-        pass
-    # Reddit and HN will be added as they're migrated
-    # try:
-    #     import growth.platforms.reddit.platform
-    #     import growth.platforms.hn.platform
-    # except ImportError:
-    #     pass
+    for mod in [
+        "growth.platforms.twitter.platform",
+        "growth.platforms.reddit.platform",
+        "growth.platforms.hn.platform",
+    ]:
+        try:
+            __import__(mod)
+        except ImportError:
+            pass
 
 
 def _auth_twitter_browser(username: str, identity_dir: Path) -> bool:
