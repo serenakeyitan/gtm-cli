@@ -51,10 +51,26 @@ class Identity:
         return self.identity_dir / "health.json"
 
     def save(self) -> None:
-        """Save identity metadata to disk."""
+        """Save identity metadata to disk with secure permissions."""
+        import os
+        import stat
+
         self.identity_dir.mkdir(parents=True, exist_ok=True)
+        # Secure the identity directory — owner-only
+        try:
+            os.chmod(self.identity_dir, stat.S_IRWXU)  # 0700
+        except OSError:
+            pass
+
         with open(self.identity_yaml_path, "w") as f:
             yaml.dump(asdict(self), f, default_flow_style=False)
+
+        # Secure credential files — owner-only read/write
+        for secret_file in self.identity_dir.glob("*.json"):
+            try:
+                os.chmod(secret_file, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+            except OSError:
+                pass
 
     @classmethod
     def load(cls, identity_dir: Path) -> Identity:

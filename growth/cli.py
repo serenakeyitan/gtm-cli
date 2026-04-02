@@ -116,9 +116,13 @@ def init():
 @click.argument("platform", type=click.Choice(["twitter", "reddit", "hn"]))
 @click.option("--username", "-u", help="Username for the account")
 @click.option("--email", "-e", help="Email (Twitter only)")
-@click.option("--password", "-p", help="Password")
-def auth(platform, username, email, password):
-    """Connect a platform account."""
+def auth(platform, username, email):
+    """Connect a platform account.
+
+    Credentials are prompted interactively (never passed as CLI args)
+    to avoid leaking in shell history or process lists.
+    """
+    password = None  # Always prompt, never accept as CLI arg
     ensure_dirs()
 
     # Import platform adapters to register them

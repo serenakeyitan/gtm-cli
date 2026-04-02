@@ -61,6 +61,20 @@ class GrowthConfig:
 
 
 def ensure_dirs() -> None:
-    """Create all required directories."""
+    """Create all required directories with secure permissions.
+
+    Credential directories are created with 0700 (owner-only access)
+    to prevent other users from reading cookies/sessions.
+    """
+    import os
+    import stat
+
     for d in [CONFIG_DIR, IDENTITIES_DIR, RATE_LIMITS_DIR, OUTPUT_DIR]:
         d.mkdir(parents=True, exist_ok=True)
+
+    # Secure credential directories — owner-only access
+    for d in [IDENTITIES_DIR, RATE_LIMITS_DIR]:
+        try:
+            os.chmod(d, stat.S_IRWXU)  # 0700
+        except OSError:
+            pass  # Best effort on platforms that don't support chmod
