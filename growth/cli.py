@@ -270,6 +270,16 @@ def twitter_post(text, as_identity, dry_run, force, json_output):
     asyncio.run(_do_post("twitter", "post", text, as_identity, dry_run, force, json_output))
 
 
+@twitter.command("user")
+@click.argument("username")
+@click.option("--as", "as_identity", help="Identity to use")
+@click.option("--count", default=10, help="Number of tweets")
+@click.option("--json", "json_output", is_flag=True, help="JSON output")
+def twitter_user(username, as_identity, count, json_output):
+    """Get recent tweets from a user."""
+    asyncio.run(_do_user_tweets("twitter", username, as_identity, count, json_output))
+
+
 @twitter.command("search")
 @click.argument("query")
 @click.option("--as", "as_identity", help="Identity to use")
@@ -379,6 +389,40 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         else:
             console.print(f"[red]❌ Failed: {result.error}[/red]")
         sys.exit(1)
+
+
+async def _do_user_tweets(platform: str, username: str, as_identity, count: int, json_output: bool):
+    """Fetch recent tweets from a specific user."""
+    from growth.identity.manager import IdentityManager
+    from growth.platforms.twitter.client import TwitterClient, TwitterClientError
+
+    mgr = IdentityManager()
+    identity = mgr.resolve_as_flag(as_identity, platform)
+    cookie_path = identity.identity_dir / "cookies.json"
+    client = TwitterClient(cookie_path=cookie_path)
+
+    try:
+        tweets = await client.get_user_tweets(username.lstrip("@"), count=count)
+    except Exception as e:
+        _handle_auth_error(e, platform)
+        console.print(f"[red]❌ Failed: {e}[/red]")
+        sys.exit(1)
+
+    if json_output:
+        click.echo(json.dumps(tweets, indent=2))
+    else:
+        if not tweets:
+            console.print(f"No tweets found for @{username}")
+            return
+        console.print(f"\n  [bold]@{username}[/bold] — latest {len(tweets)} tweets:\n")
+        for t in tweets:
+            likes = t.get("favorite_count", 0)
+            rts = t.get("retweet_count", 0)
+            text = t.get("text", "")
+            date = t.get("created_at", "")
+            console.print(f"  [dim]{date}[/dim]")
+            console.print(f"  {text[:280]}")
+            console.print(f"  [dim]❤️ {likes}  🔁 {rts}[/dim]\n")
 
 
 async def _do_search(platform: str, query: str, as_identity, count: int, json_output: bool):
