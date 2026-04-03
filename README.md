@@ -107,6 +107,10 @@ growth run cross-search --dry-run -p query="AI"
 growth run ./my-strategy.yaml -p topic="my product"
 ```
 
+Strategies live in two places:
+- **Your strategies**: `~/.config/growth/strategies/` (local, private, never on GitHub)
+- **Examples**: `strategies/examples/` in the repo (samples to learn from)
+
 ### Track — Live Engagement Metrics
 
 ```bash

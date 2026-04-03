@@ -83,18 +83,18 @@ class Strategy:
 def find_strategies() -> list[Path]:
     """Find all available strategy files.
 
-    Searches:
-    1. Built-in strategies/ directory (in the package)
-    2. User strategies in ~/.config/growth/strategies/
-    3. Current directory ./strategies/
+    Search order (user strategies first, then examples):
+    1. User strategies: ~/.config/growth/strategies/ (LOCAL, private)
+    2. Project strategies: ./strategies/ (project-specific)
+    3. Built-in examples: <package>/strategies/examples/ (shipped with repo)
     """
     paths = []
     seen = set()
 
     search_dirs = [
-        Path(__file__).parent.parent.parent / "strategies",        # package built-in
-        Path("~/.config/growth/strategies").expanduser(),           # user custom
-        Path("./strategies"),                                       # project local
+        Path("~/.config/growth/strategies").expanduser(),                  # user's own (local, private)
+        Path("./strategies"),                                              # project local
+        Path(__file__).parent.parent.parent / "strategies" / "examples",   # shipped examples
     ]
 
     for d in search_dirs:

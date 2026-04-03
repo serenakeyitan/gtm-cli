@@ -230,6 +230,18 @@ class TwitterClient:
         except Exception as e:
             raise TwitterClientError(f"retweet({tweet_id}) failed: {e}") from e
 
+    async def follow_user(self, user_id: str) -> None:
+        """Follow a user by ID."""
+        await self.ensure_logged_in()
+        await self._throttle()
+        try:
+            await self._retry_on_rate_limit(
+                f"follow({user_id})",
+                lambda: self._client.follow_user(user_id),
+            )
+        except Exception as e:
+            raise TwitterClientError(f"follow_user({user_id}) failed: {e}") from e
+
     async def reply_to_tweet(self, tweet_id: str, text: str) -> dict[str, Any]:
         """Reply to a tweet."""
         await self.ensure_logged_in()
@@ -265,3 +277,34 @@ def _tweet_to_dict(tweet: Any) -> dict[str, Any]:
         "view_count": getattr(tweet, "view_count", None),
         "lang": getattr(tweet, "lang", None),
     }
+
+
+# ── Module-level singleton ────────────────────────────────────────────
+
+_default_client: TwitterClient | None = None
+
+
+def get_twitter_client(cookie_path: str | None = None) -> TwitterClient:
+    """Return (or create) the module-level TwitterClient singleton."""
+    global _default_client
+    if _default_client is None:
+        if cookie_path is None:
+            # Find the first available Twitter identity
+            from growth.config import IDENTITIES_DIR
+            twitter_dir = IDENTITIES_DIR / "twitter"
+            if twitter_dir.exists():
+                for d in sorted(twitter_dir.iterdir()):
+                    cp = d / "cookies.json"
+                    if d.is_dir() and not d.name.startswith("_") and cp.exists():
+                        cookie_path = str(cp)
+                        break
+            if cookie_path is None:
+                cookie_path = "~/.config/growth/identities/twitter/default/cookies.json"
+        _default_client = TwitterClient(Path(cookie_path))
+    return _default_client
+
+
+def reset_twitter_client() -> None:
+    """Reset the singleton — useful for testing."""
+    global _default_client
+    _default_client = None

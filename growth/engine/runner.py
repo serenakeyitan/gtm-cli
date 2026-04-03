@@ -114,10 +114,19 @@ async def run_strategy(
                 state["steps"][step_id] = {"status": "failed", "error": str(e)}
                 state["errors"].append(f"Step {step_id}: {e}")
 
-        # Agent steps (v0.3 — placeholder)
+        # Agent steps — requires claude-code-sdk (pip install growth-cli[agents])
         elif step.type == "agent":
-            log.info("Step [%s]: agent steps not yet implemented (v0.3)", step_id)
-            state["steps"][step_id] = {"status": "skipped", "reason": "agent steps coming in v0.3"}
+            try:
+                result = await _execute_agent_step(step, resolved_params, step_outputs, mgr)
+                state["steps"][step_id] = {"status": "success", "result": result}
+                step_outputs[step_id] = result
+            except ImportError:
+                log.warning("Step [%s]: claude-code-sdk not installed. Run: pip install growth-cli[agents]", step_id)
+                state["steps"][step_id] = {"status": "skipped", "reason": "Install agents: pip install growth-cli[agents]"}
+            except Exception as e:
+                log.error("Step [%s] failed: %s", step_id, e)
+                state["steps"][step_id] = {"status": "failed", "error": str(e)}
+                state["errors"].append(f"Step {step_id}: {e}")
 
         else:
             log.warning("Step [%s]: unknown step type or missing platform/action", step_id)
@@ -133,6 +142,128 @@ async def run_strategy(
     log_run(strategy.name, state)
 
     return state
+
+
+async def _execute_agent_step(
+    step: StrategyStep,
+    resolved_params: dict[str, Any],
+    step_outputs: dict[str, Any],
+    mgr: IdentityManager,
+) -> dict[str, Any]:
+    """Execute an LLM agent step using Claude Code SDK.
+
+    Maps agent names to their run functions from growth.agents.*
+    """
+    agent_name = step.agent
+    params = dict(step.params)
+
+    # Resolve param references
+    for key, val in params.items():
+        if isinstance(val, str) and val.startswith("{{ params."):
+            param_name = val.replace("{{ params.", "").replace(" }}", "").strip()
+            if param_name in resolved_params:
+                params[key] = resolved_params[param_name]
+        # Resolve step output references like "{{ scout.output }}"
+        if isinstance(val, str) and "{{" in val:
+            for step_id, output in step_outputs.items():
+                ref = f"{{{{ {step_id}.output }}}}"
+                if val.strip() == ref:
+                    params[key] = output
+                    break
+
+    # Map agent names to their functions
+    agent_map = {
+        "scout": ("growth.agents.scout", "run_twitter_scout"),
+        "novelty_checker": ("growth.agents.novelty_checker", "run_novelty_checker"),
+        "builder": ("growth.agents.builder", "run_builder"),
+        "tester": ("growth.agents.tester", "run_tester"),
+        "promoter": ("growth.agents.promoter", "run_promoter"),
+        "hn_promoter": ("growth.agents.hn_promoter", "run_hn_promoter"),
+    }
+
+    if agent_name not in agent_map:
+        raise ValueError(f"Unknown agent: {agent_name}. Available: {list(agent_map.keys())}")
+
+    module_path, func_name = agent_map[agent_name]
+
+    import importlib
+    module = importlib.import_module(module_path)
+    agent_fn = getattr(module, func_name)
+
+    log.info("Running agent: %s (function: %s.%s)", agent_name, module_path, func_name)
+
+    # Build state and config objects the agents expect
+    from growth.engine.state import RunState
+    run_state = RunState.create("growth-cli-run")
+
+    # Build a config-like object with the attributes agents expect
+    from growth.config import IDENTITIES_DIR
+    config = _build_agent_config(IDENTITIES_DIR)
+
+    # Agents have different signatures — adapt per agent
+    if agent_name == "scout":
+        result = await agent_fn(run_state, config, activity_logger=None)
+    elif agent_name in ("promoter", "hn_promoter"):
+        result = await agent_fn(run_state, {"ideas": params.get("ideas", []), "config": config}, activity_logger=None)
+    elif agent_name == "novelty_checker":
+        result = await agent_fn(run_state, params.get("ideas", []), activity_logger=None)
+    elif agent_name == "builder":
+        result = await agent_fn(run_state, params.get("ideas", []), activity_logger=None)
+    elif agent_name == "tester":
+        result = await agent_fn(run_state, params.get("builds", []), activity_logger=None)
+    else:
+        result = await agent_fn(run_state, params, activity_logger=None)
+
+    return result
+
+
+def _build_agent_config(identities_dir: Path) -> Any:
+    """Build a config object with attributes the legacy agents expect."""
+
+    class _TwitterConfig:
+        def __init__(self):
+            twitter_dir = identities_dir / "twitter"
+            self.cookie_path = str(twitter_dir / "default" / "cookies.json")
+            if twitter_dir.exists():
+                for d in sorted(twitter_dir.iterdir()):
+                    cp = d / "cookies.json"
+                    if d.is_dir() and not d.name.startswith("_") and cp.exists():
+                        self.cookie_path = str(cp)
+                        break
+            self.seed_accounts = []
+            self.seed_company_accounts = []
+            self.request_delay = 8.0
+            self.min_engagement = {"likes": 1000, "retweets": 200}
+            self.lookback_hours = 24
+
+    class _RedditConfig:
+        def __init__(self):
+            self.credentials_path = ""
+            self.user_agent = "growth-cli/0.1"
+            self.target_subreddits = ["SaaS", "startups", "programming"]
+            self.session_dir = str(identities_dir / "reddit")
+
+    class _HNConfig:
+        def __init__(self):
+            self.session_dir = str(identities_dir / "hn")
+
+    class _ModelsConfig:
+        def __init__(self):
+            self.scout = "claude-sonnet-4-20250514"
+            self.novelty = "claude-sonnet-4-20250514"
+            self.builder = "claude-sonnet-4-20250514"
+            self.tester = "claude-sonnet-4-20250514"
+            self.promoter = "claude-sonnet-4-20250514"
+            self.hn_promoter = "claude-sonnet-4-20250514"
+
+    class _Config:
+        def __init__(self):
+            self.twitter = _TwitterConfig()
+            self.reddit = _RedditConfig()
+            self.hn = _HNConfig()
+            self.models = _ModelsConfig()
+
+    return _Config()
 
 
 async def _execute_tool_step(
