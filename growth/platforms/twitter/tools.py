@@ -1,38 +1,44 @@
-"""Twitter MCP tools — thin wrappers around the client for agent use.
-
-These are imported by agents as callable tool functions.
-They match the MCP tool signatures from the original pipeline.
-"""
+"""Twitter MCP tools — backed by twikit. Used by agents via Claude SDK."""
 
 from __future__ import annotations
 
 import json
-from typing import Any
 
-from growth.platforms.twitter.client import TwitterClient, get_twitter_client
+from claude_code_sdk import tool
+
+from growth.platforms.twitter.client import get_twitter_client, TwitterClientError
 
 
-async def twitter_search(args: dict[str, Any]) -> dict[str, Any]:
-    """Search tweets by query."""
+@tool("twitter_search", "Search tweets by query", {"query": str, "count": int})
+async def twitter_search(args):
     query = args["query"]
     count = args.get("count", 20)
-    client = get_twitter_client()
-    tweets = await client.search(query, count=count)
-    return {"content": [{"type": "text", "text": json.dumps(tweets, indent=2)}]}
+    try:
+        client = get_twitter_client()
+        tweets = await client.search(query, count=count)
+        return {"content": [{"type": "text", "text": json.dumps(tweets, indent=2)}]}
+    except TwitterClientError as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "isError": True}
 
 
-async def twitter_user_tweets(args: dict[str, Any]) -> dict[str, Any]:
-    """Get recent tweets from a user."""
+@tool("twitter_user_tweets", "Get recent tweets from a specific user", {"username": str, "count": int})
+async def twitter_user_tweets(args):
     username = args["username"]
     count = args.get("count", 20)
-    client = get_twitter_client()
-    tweets = await client.get_user_tweets(username, count=count)
-    return {"content": [{"type": "text", "text": json.dumps(tweets, indent=2)}]}
+    try:
+        client = get_twitter_client()
+        tweets = await client.get_user_tweets(username, count=count)
+        return {"content": [{"type": "text", "text": json.dumps(tweets, indent=2)}]}
+    except TwitterClientError as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "isError": True}
 
 
-async def twitter_get_tweet(args: dict[str, Any]) -> dict[str, Any]:
-    """Get a single tweet by ID."""
+@tool("twitter_get_tweet", "Get a single tweet by ID", {"tweet_id": str})
+async def twitter_get_tweet(args):
     tweet_id = args["tweet_id"]
-    client = get_twitter_client()
-    tweet = await client.get_tweet(tweet_id)
-    return {"content": [{"type": "text", "text": json.dumps(tweet, indent=2)}]}
+    try:
+        client = get_twitter_client()
+        tweet = await client.get_tweet(tweet_id)
+        return {"content": [{"type": "text", "text": json.dumps(tweet, indent=2)}]}
+    except TwitterClientError as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "isError": True}
