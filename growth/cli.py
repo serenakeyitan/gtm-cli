@@ -173,27 +173,44 @@ def auth(platform, username, email, use_stdin):
         _auth_twitter_paste(username, identity_dir)
 
     elif platform in ("reddit", "hn"):
-        # Reddit & HN: browser-based manual login
+        platform_name = "Reddit" if platform == "reddit" else "Hacker News"
         if not username:
-            username = click.prompt(f"{'Reddit' if platform == 'reddit' else 'Hacker News'} username")
+            username = click.prompt(f"{platform_name} username")
 
         identity_dir = IDENTITIES_DIR / platform / username
-        platform_name = "Reddit" if platform == "reddit" else "Hacker News"
 
-        console.print(f"\nOpening Chrome for {platform_name} login...")
-        console.print("Please log in manually in the browser window.")
-        console.print("(Handle any CAPTCHA/2FA prompts)")
+        if use_stdin:
+            # Agent flow: expect cookie JSON on stdin
+            import sys as _sys
+            raw = _sys.stdin.read().strip()
+            _auth_cookie_paste(platform, username, identity_dir, raw)
+            return
 
-        try:
-            metadata = asyncio.run(
-                plat.auth_interactive(identity_dir, username=username)
-            )
-            _save_identity(platform, username, metadata)
-            console.print(f"[green]✅ Login detected! Session saved.[/green]")
-            console.print(f"   Identity: [bold]{platform}:{username}[/bold]")
-        except Exception as e:
-            console.print(f"[red]❌ Login failed: {e}[/red]")
-            sys.exit(1)
+        console.print(f"\n  Connecting {platform_name} account [bold]{username}[/bold]")
+
+        method = click.prompt(
+            "  Auth method",
+            type=click.Choice(["browser", "cookies"]),
+            default="cookies",
+        )
+
+        if method == "cookies":
+            _auth_platform_cookie_paste(platform, platform_name, username, identity_dir)
+        else:
+            console.print(f"\n  Opening Chrome for {platform_name} login...")
+            console.print("  Log in manually. Handle any CAPTCHA/2FA prompts.\n")
+            try:
+                metadata = asyncio.run(
+                    plat.auth_interactive(identity_dir, username=username)
+                )
+                _save_identity(platform, username, metadata)
+                console.print(f"  [green]✅ Login detected! Session saved.[/green]")
+                console.print(f"     Identity: [bold]{platform}:{username}[/bold]")
+            except Exception as e:
+                console.print(f"  [red]❌ Login failed: {e}[/red]")
+                console.print(f"\n  Try cookie auth instead:")
+                console.print(f"    [bold]growth auth {platform} -u {username}[/bold]")
+                sys.exit(1)
 
 
 # ── Status ────────────────────────────────────────────────────────────
@@ -809,6 +826,107 @@ def _save_cookies(username: str, identity_dir: Path, cookie_dict: dict) -> None:
     console.print(f"\n  [green]✅ Cookies saved![/green]")
     console.print(f"     Identity: [bold]twitter:{username}[/bold]")
     console.print(f"\n     Test it: [bold]growth twitter search 'AI agents' --count 3[/bold]")
+
+
+REDDIT_COOKIE_INSTRUCTIONS = """
+  [bold cyan]Grab your Reddit cookies:[/bold cyan]
+
+  1. Install Cookie-Editor: [link={ext}]{ext}[/link]
+  2. Go to [bold]reddit.com[/bold] (make sure you're logged in)
+  3. Click Cookie-Editor icon → [bold]Export[/bold]
+  4. Paste the JSON below
+""".format(ext=COOKIE_EDITOR_EXTENSION)
+
+HN_COOKIE_INSTRUCTIONS = """
+  [bold cyan]Grab your Hacker News cookies:[/bold cyan]
+
+  1. Install Cookie-Editor: [link={ext}]{ext}[/link]
+  2. Go to [bold]news.ycombinator.com[/bold] (make sure you're logged in)
+  3. Click Cookie-Editor icon → [bold]Export[/bold]
+  4. Paste the JSON below
+""".format(ext=COOKIE_EDITOR_EXTENSION)
+
+
+def _auth_platform_cookie_paste(platform: str, platform_name: str, username: str, identity_dir: Path) -> None:
+    """Auth Reddit or HN by pasting Cookie-Editor JSON export."""
+    if platform == "reddit":
+        console.print(REDDIT_COOKIE_INSTRUCTIONS)
+    else:
+        console.print(HN_COOKIE_INSTRUCTIONS)
+
+    raw = click.prompt("  Paste cookies").strip()
+    _auth_cookie_paste(platform, username, identity_dir, raw)
+
+
+def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: str) -> None:
+    """Parse and save cookies for Reddit or HN."""
+    import os
+    import stat
+
+    if not raw:
+        console.print("[red]  ❌ No cookies pasted.[/red]")
+        sys.exit(1)
+
+    cookie_dict = _parse_cookies(raw)
+
+    if platform == "reddit":
+        # Reddit needs: reddit_session or token_v2
+        if "reddit_session" not in cookie_dict and "token_v2" not in cookie_dict:
+            console.print("[red]  ❌ No reddit_session or token_v2 found in cookies.[/red]")
+            console.print("  Make sure you're logged into reddit.com before exporting.")
+            sys.exit(1)
+
+        # Save as Playwright storage_state format
+        session_dir = identity_dir / "session"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(session_dir, stat.S_IRWXU)
+
+        # Build minimal storage_state.json that Playwright expects
+        cookies_list = [
+            {
+                "name": name,
+                "value": value,
+                "domain": ".reddit.com",
+                "path": "/",
+                "httpOnly": name in ("reddit_session", "token_v2"),
+                "secure": True,
+                "sameSite": "None",
+            }
+            for name, value in cookie_dict.items()
+        ]
+        storage_state = {"cookies": cookies_list, "origins": []}
+        storage_path = session_dir / "storage_state.json"
+
+        import json as _json
+        with open(storage_path, "w") as f:
+            _json.dump(storage_state, f, indent=2)
+        os.chmod(storage_path, stat.S_IRUSR | stat.S_IWUSR)
+
+    elif platform == "hn":
+        # HN needs: user cookie
+        if "user" not in cookie_dict:
+            console.print("[red]  ❌ No 'user' cookie found.[/red]")
+            console.print("  Make sure you're logged into news.ycombinator.com before exporting.")
+            sys.exit(1)
+
+        session_dir = identity_dir / "session"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(session_dir, stat.S_IRWXU)
+
+        import json as _json
+        cookie_path = session_dir / "hn_cookie.json"
+        with open(cookie_path, "w") as f:
+            _json.dump({"user_cookie": cookie_dict["user"]}, f, indent=2)
+        os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)
+
+    _save_identity(platform, username, {"auth_method": "cookies_manual"})
+    console.print(f"\n  [green]✅ Cookies saved![/green]")
+    console.print(f"     Identity: [bold]{platform}:{username}[/bold]")
+
+    if platform == "reddit":
+        console.print(f"\n     Test it: [bold]growth reddit search 'test' --count 1[/bold]")
+    else:
+        console.print(f"\n     Test it: [bold]growth hn search 'test' --count 1[/bold]")
 
 
 def _handle_auth_error(error: Exception, platform: str) -> None:
