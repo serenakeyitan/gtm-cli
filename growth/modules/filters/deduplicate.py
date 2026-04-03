@@ -38,7 +38,11 @@ class DeduplicateFilterModule(Module):
             metadata={"input_count": len(input_data.data), "output_count": len(filtered), "duplicates_removed": len(input_data.data) - len(filtered)})
 
     def _load_posted_ids(self, field: str) -> set[str]:
-        """Load IDs of already-posted content from output repo."""
+        """Load IDs of already-posted content from output repo.
+        
+        Uses the specified field to match against posted metadata.
+        Falls back to post_id if the field isn't found.
+        """
         import yaml
         from growth.config import GrowthConfig
         output_dir = Path(GrowthConfig.load().output_dir).expanduser()
@@ -46,14 +50,19 @@ class DeduplicateFilterModule(Module):
         ids = set()
         if posted_dir.exists():
             for f in posted_dir.glob("*.md"):
-                text = f.read_text()
+                try:
+                    text = f.read_text(errors="replace")
+                except (OSError, IOError):
+                    continue
                 if text.startswith("---"):
                     parts = text.split("---", 2)
                     if len(parts) >= 3:
                         try:
                             meta = yaml.safe_load(parts[1])
-                            if meta.get("post_id"):
-                                ids.add(str(meta["post_id"]))
+                            # Try the requested field first, fall back to post_id
+                            val = meta.get(field) or meta.get("post_id")
+                            if val:
+                                ids.add(str(val))
                         except Exception:
                             pass
         return ids

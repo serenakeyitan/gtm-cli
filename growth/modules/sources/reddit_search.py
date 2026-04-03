@@ -19,10 +19,17 @@ class RedditSearchModule(Module):
         query = params["query"]
         count = params.get("count", 20)
         sub = params.get("subreddit")
-        url = f"https://www.reddit.com/r/{sub}/search.json?q={query}&restrict_sr=1&limit={count}" if sub else f"https://www.reddit.com/search.json?q={query}&limit={count}"
+
+        if sub:
+            url = f"https://www.reddit.com/r/{sub}/search.json"
+            search_params = {"q": query, "restrict_sr": "1", "limit": count}
+        else:
+            url = "https://www.reddit.com/search.json"
+            search_params = {"q": query, "limit": count}
+
         try:
             async with httpx.AsyncClient() as http:
-                resp = await http.get(url, headers={"User-Agent": "growth-cli/0.1"})
+                resp = await http.get(url, params=search_params, headers={"User-Agent": "growth-cli/0.1"})
                 posts = [p["data"] for p in resp.json().get("data", {}).get("children", [])]
             return ModuleResult(success=True, data=posts, metadata={"query": query, "count": len(posts)})
         except Exception as e:

@@ -28,12 +28,22 @@ class EngagementFilterModule(Module):
 
         filtered = []
         for item in input_data.data:
-            likes = item.get("favorite_count", item.get("score", item.get("points", 0)))
+            # Platform-aware engagement extraction
+            likes = item.get("favorite_count", 0)          # Twitter
+            score = item.get("score", item.get("points", 0))  # Reddit / HN
             rts = item.get("retweet_count", 0)
             comments = item.get("num_comments", item.get("reply_count", 0))
 
-            if likes >= min_likes and likes >= min_score and rts >= min_rts and comments >= min_comments:
-                filtered.append(item)
+            # Check each threshold independently against the right field
+            if likes < min_likes:
+                continue
+            if score < min_score:
+                continue
+            if rts < min_rts:
+                continue
+            if comments < min_comments:
+                continue
+            filtered.append(item)
 
         return ModuleResult(
             success=True,
