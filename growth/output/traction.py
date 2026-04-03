@@ -101,17 +101,32 @@ async def fetch_all_traction(refresh: bool = True) -> list[dict[str, Any]]:
 
     Reads posted/*.md files, extracts platform/post_id/url,
     then fetches live engagement data from each platform.
+
+    If refresh=False, loads the most recent cached snapshot instead.
     """
     import yaml
     from growth.config import IDENTITIES_DIR
 
     output_dir = Path(GrowthConfig.load().output_dir).expanduser()
     posted_dir = output_dir / "posted"
+    traction_dir = output_dir / "traction"
+
+    # If --no-refresh, load the most recent snapshot
+    if not refresh:
+        if traction_dir.exists():
+            snapshots = sorted(traction_dir.glob("*.json"), reverse=True)
+            if snapshots:
+                with open(snapshots[0]) as fp:
+                    return json.load(fp)
+        return []
 
     if not posted_dir.exists():
         return []
 
     results = []
+
+    # Reuse a single TwitterClient per identity to respect throttling
+    _twitter_clients: dict[str, Any] = {}
 
     for f in sorted(posted_dir.glob("*.md"), reverse=True):
         text = f.read_text()
@@ -132,6 +147,7 @@ async def fetch_all_traction(refresh: bool = True) -> list[dict[str, Any]]:
         url = meta.get("url", "")
         content = parts[2].strip()[:80]
         posted_at = meta.get("posted_at", "")
+        identity_name = meta.get("identity", "")
 
         entry = {
             "platform": platform,
@@ -139,38 +155,56 @@ async def fetch_all_traction(refresh: bool = True) -> list[dict[str, Any]]:
             "url": url,
             "content": content,
             "posted_at": posted_at,
+            "identity": identity_name,
             "file": f.name,
         }
 
-        if refresh:
-            if platform == "twitter" and post_id:
-                # Find a Twitter identity for fetching
-                twitter_dir = IDENTITIES_DIR / "twitter"
-                identity_dir = None
-                if twitter_dir.exists():
-                    for d in twitter_dir.iterdir():
-                        if d.is_dir() and not d.name.startswith("_"):
-                            identity_dir = d
-                            break
-                engagement = await fetch_twitter_engagement(post_id, identity_dir)
-                entry.update(engagement)
+        if platform == "twitter" and post_id:
+            # Resolve the correct identity directory from the post metadata
+            identity_dir = _resolve_twitter_identity(identity_name, IDENTITIES_DIR)
+            if identity_dir and identity_dir not in _twitter_clients:
+                from growth.platforms.twitter.client import TwitterClient
+                _twitter_clients[identity_dir] = TwitterClient(
+                    cookie_path=identity_dir / "cookies.json"
+                )
+            engagement = await fetch_twitter_engagement(
+                post_id, identity_dir
+            )
+            entry.update(engagement)
 
-            elif platform == "reddit" and url:
-                engagement = await fetch_reddit_engagement(url)
-                entry.update(engagement)
+        elif platform == "reddit" and url:
+            engagement = await fetch_reddit_engagement(url)
+            entry.update(engagement)
 
-            elif platform == "hn" and post_id:
-                engagement = await fetch_hn_engagement(post_id)
-                entry.update(engagement)
+        elif platform == "hn" and post_id:
+            engagement = await fetch_hn_engagement(post_id)
+            entry.update(engagement)
 
         results.append(entry)
 
-    # Save snapshot to output repo
-    if refresh and results:
-        traction_dir = output_dir / "traction"
+    # Save snapshot with second-precision filename to avoid overwrites
+    if results:
         traction_dir.mkdir(parents=True, exist_ok=True)
-        snapshot_path = traction_dir / f"{datetime.now().strftime('%Y-%m-%d_%H%M')}.json"
+        snapshot_path = traction_dir / f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
         with open(snapshot_path, "w") as fp:
             json.dump(results, fp, indent=2)
 
     return results
+
+
+def _resolve_twitter_identity(identity_name: str, identities_dir: Path) -> Path | None:
+    """Resolve a Twitter identity name (e.g. 'twitter:myhandle') to its directory."""
+    if ":" in identity_name:
+        _, username = identity_name.split(":", 1)
+        identity_dir = identities_dir / "twitter" / username
+        if identity_dir.exists() and (identity_dir / "cookies.json").exists():
+            return identity_dir
+
+    # Fallback: first available Twitter identity
+    twitter_dir = identities_dir / "twitter"
+    if twitter_dir.exists():
+        for d in sorted(twitter_dir.iterdir()):
+            if d.is_dir() and not d.name.startswith("_") and (d / "cookies.json").exists():
+                return d
+
+    return None
