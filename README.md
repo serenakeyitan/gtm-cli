@@ -107,6 +107,35 @@ growth run cross-search --dry-run -p query="AI"
 growth run ./my-strategy.yaml -p topic="my product"
 ```
 
+### Track — Live Engagement Metrics
+
+```bash
+# Check how your posts are performing
+growth traction
+
+  🐦 twitter  2026-03-27
+     Just shipped v2! 🚀
+     ❤️ 142  🔁 23  💬 12  👁 8,401
+
+  🤖 reddit  2026-03-27
+     Show r/SaaS: growth-cli
+     ⬆️ 38  💬 7  📊 0.92
+
+  🟠 hn  2026-03-27
+     Show HN: growth-cli
+     ▲ 23  💬 4
+
+# JSON for agent consumption
+growth traction --json
+
+# Skip live refresh (use cached data)
+growth traction --no-refresh
+```
+
+Fetches live data from each platform's API. Snapshots are saved to the output repo for historical tracking.
+
+Inside Claude Code, ask "how are my posts doing?" and the agent will run `growth traction --json`, analyze the numbers, and give you actionable recommendations.
+
 ### Manage — Accounts & Activity
 
 ```bash
@@ -234,9 +263,9 @@ growth-cli/                     The tool (open source)
 
 ## Roadmap
 
-- [x] **v0.1** — CLI, 3 platforms, rate limiter, strategies, auth
+- [x] **v0.1** — CLI, 3 platforms, rate limiter, strategies, auth, traction tracker
 - [ ] **v0.2** — Multi-account, proxy support, advanced rate limiting
-- [ ] **v0.3** — Chat TUI, content generation, social listening
+- [ ] **v0.3** — Chat TUI, content generation, social listening, traction alerts
 - [ ] **v0.4** — Growth Cloud (buy pre-warmed accounts & IPs)
 - [ ] **v0.5** — GitHub PR workflow for content review
 - [ ] **v1.0** — Public launch

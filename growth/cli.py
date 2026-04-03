@@ -438,6 +438,71 @@ def show_log(count):
         console.print()
 
 
+# ── Traction ──────────────────────────────────────────────────────────
+
+
+@main.command("traction")
+@click.option("--refresh/--no-refresh", default=True, help="Fetch live data from platforms")
+@click.option("--json", "json_output", is_flag=True)
+def traction_cmd(refresh, json_output):
+    """Check engagement on your posted content.
+
+    Fetches live likes, comments, score, and views from each platform
+    for every post in your output log.
+    """
+    _ensure_platforms_registered()
+    from growth.output.traction import fetch_all_traction
+
+    results = asyncio.run(fetch_all_traction(refresh=refresh))
+
+    if not results:
+        console.print("No posts tracked yet.")
+        console.print("Posts appear here after you use [bold]growth <platform> post[/bold]")
+        return
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2))
+        return
+
+    console.print(f"\n  [bold]Traction Report ({len(results)} posts):[/bold]\n")
+
+    for r in results:
+        platform = r.get("platform", "?")
+        content = r.get("content", "")[:60]
+        posted_at = r.get("posted_at", "")[:10]
+        error = r.get("error")
+
+        # Platform icon
+        icon = {"twitter": "🐦", "reddit": "🤖", "hn": "🟠"}.get(platform, "📝")
+
+        console.print(f"  {icon} [bold]{platform}[/bold]  [dim]{posted_at}[/dim]")
+        console.print(f"     {content}")
+
+        if error:
+            console.print(f"     [dim red]⚠ {error}[/dim red]")
+        else:
+            # Platform-specific metrics
+            if platform == "twitter":
+                likes = r.get("likes", "?")
+                rts = r.get("retweets", "?")
+                replies = r.get("replies", "?")
+                views = r.get("views", "?")
+                console.print(f"     ❤️ {likes}  🔁 {rts}  💬 {replies}  👁 {views}")
+            elif platform == "reddit":
+                score = r.get("score", "?")
+                comments = r.get("comments", "?")
+                ratio = r.get("upvote_ratio", "?")
+                console.print(f"     ⬆️ {score}  💬 {comments}  📊 {ratio}")
+            elif platform == "hn":
+                points = r.get("points", "?")
+                comments = r.get("comments", "?")
+                console.print(f"     ▲ {points}  💬 {comments}")
+
+        if r.get("url"):
+            console.print(f"     [dim]{r['url'][:80]}[/dim]")
+        console.print()
+
+
 # ── Twitter Commands ──────────────────────────────────────────────────
 
 

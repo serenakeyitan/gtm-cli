@@ -20,6 +20,8 @@ allowed-tools:
 - `growth twitter reply --as <id> <tweet_id> "text"` — reply to a tweet
 - `growth run <strategy> [--dry-run]` — run a strategy
 - `growth run --list` — list available strategies
+- `growth traction` — check live engagement on posted content
+- `growth traction --json` — engagement data for analysis
 
 ## Setup
 
@@ -30,6 +32,24 @@ growth auth twitter    # Terminal prompts for username/email/password
 growth auth reddit     # Opens Chrome for manual login
 growth auth hn         # Opens Chrome for manual login
 ```
+
+## Traction Analysis
+
+When the user asks about engagement, performance, or "how are my posts doing":
+
+1. Run `growth traction --json` to get live engagement data
+2. Analyze the numbers: compare across platforms, identify trends, spot outliers
+3. Give actionable recommendations:
+   - Which posts are gaining momentum (engage in comments now)
+   - Which posts are stalling (adjust strategy)
+   - What content type/tone is working best
+   - Best time to post based on historical performance
+
+Example flow:
+```bash
+growth traction --json    # Get raw data
+```
+Then analyze and recommend next actions.
 
 ## Tips
 
