@@ -20,7 +20,10 @@ Reviews are stored in `.codex-reviews/<sha>.md` (gitignored, local only).
 | `7d3b78c` | Route 1 & 2 + agents | 🔄 Pending | — | — |
 | `616979d` | MCP tools @tool decorator | 🔄 Pending | — | — |
 | `4dfbfd7` | Module system (v0.2 Phase 1) | Found 5 issues | 5 | Fixed in `c9b4ae6` |
-| `c9b4ae6` | Fix module findings | 🔄 Reviewing | — | — |
+| `c9b4ae6` | Fix module findings | Found 3 issues | 3 | Fixed in `9553e75` |
+| `9553e75` | Fix round 2 findings | Found 1 issue | 1 | Fixed in `178b10c` |
+| `178b10c` | Normalized key names | 🔄 Reviewing | — | — |
+| `96be268` | Codex review log doc | ✅ LGTM (doc only) | 0 | — |
 
 ## Process
 
