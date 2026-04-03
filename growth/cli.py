@@ -438,6 +438,76 @@ def show_log(count):
         console.print()
 
 
+# ── Modules ───────────────────────────────────────────────────────────
+
+
+@main.group()
+def modules():
+    """Browse composable modules (Lego blocks for strategies)."""
+    pass
+
+
+@modules.command("list")
+@click.option("--category", "-c", help="Filter by category (source, filter, action, monitor)")
+@click.option("--json", "json_output", is_flag=True)
+def modules_list(category, json_output):
+    """List all available modules."""
+    from growth.modules import registry
+
+    if category:
+        mods = registry.list_by_category(category)
+    else:
+        mods = registry.list_all()
+
+    if json_output:
+        click.echo(json.dumps([{"name": m.name, "category": m.category, "description": m.description,
+                                 "platform": m.platform, "requires_auth": m.requires_auth}
+                                for m in mods], indent=2))
+        return
+
+    if not mods:
+        console.print("No modules found.")
+        return
+
+    current_cat = ""
+    for m in mods:
+        if m.category != current_cat:
+            current_cat = m.category
+            label = {"source": "SOURCES (Eyes)", "filter": "FILTERS (Brain)", "transform": "TRANSFORMS (Voice)",
+                     "action": "ACTIONS (Hands)", "monitor": "MONITORS (Track)", "control": "CONTROL (Flow)"}.get(current_cat, current_cat.upper())
+            console.print(f"\n  [bold]{label}[/bold]")
+        auth = " 🔑" if m.requires_auth else ""
+        console.print(f"    [cyan]{m.name:25s}[/cyan] {m.description}{auth}")
+
+    console.print(f"\n  [dim]{len(mods)} modules total[/dim]")
+
+
+@modules.command("info")
+@click.argument("name")
+def modules_info(name):
+    """Show detailed info about a module."""
+    from growth.modules import registry
+
+    try:
+        m = registry.get(name)
+    except KeyError as e:
+        console.print(f"[red]{e}[/red]")
+        return
+
+    console.print(f"\n  [bold]{m.name}[/bold]")
+    console.print(f"  Category:    {m.category}")
+    console.print(f"  Description: {m.description}")
+    if m.platform:
+        console.print(f"  Platform:    {m.platform}")
+    console.print(f"  Auth:        {'Required 🔑' if m.requires_auth else 'Not needed'}")
+    if m.param_schema:
+        console.print(f"\n  [bold]Parameters:[/bold]")
+        for k, v in m.param_schema.items():
+            req = " (required)" if v.get("required") else f" (default: {v.get('default', '?')})"
+            console.print(f"    {k}: {v.get('type', '?')}{req}")
+    console.print()
+
+
 # ── Traction ──────────────────────────────────────────────────────────
 
 
