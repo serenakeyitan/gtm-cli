@@ -102,6 +102,12 @@ def init():
     console.print(f"✅ Output (git):     {output_dir}")
     console.print("\nNext: connect your first account with [bold]growth auth twitter[/bold]")
 
+    # Check for old pipeline credentials to offer migration
+    from growth.identity.migrate import OLD_SECRETS_DIR
+    if OLD_SECRETS_DIR.exists():
+        console.print(f"\n[dim]Found existing openclaw pipeline credentials at {OLD_SECRETS_DIR}[/dim]")
+        console.print("[dim]Run [bold]growth migrate from-openclaw[/bold] to import them.[/dim]")
+
     # Show burner warning on first init
     if not config.burner_warning_shown:
         console.print(BURNER_WARNING)
@@ -265,6 +271,171 @@ def status():
             for action, s in rl_status.items():
                 if s["cooldown"] != "ready":
                     console.print(f"  {action}: {s['this_hour']} this hour, cooldown {s['cooldown']}")
+
+
+# ── Run (Strategy Execution) ──────────────────────────────────────────
+
+
+@main.command("run")
+@click.argument("strategy_name", required=False)
+@click.option("--list", "list_strategies", is_flag=True, help="List available strategies")
+@click.option("--dry-run", is_flag=True, help="Preview without executing")
+@click.option("--param", "-p", multiple=True, help="Strategy params as key=value")
+@click.option("--json", "json_output", is_flag=True)
+def run_strategy_cmd(strategy_name, list_strategies, dry_run, param, json_output):
+    """Run a strategy or list available strategies."""
+    _ensure_platforms_registered()
+
+    from growth.engine.strategy_loader import Strategy, find_strategies
+
+    if list_strategies or not strategy_name:
+        strategies = find_strategies()
+        if not strategies:
+            console.print("No strategies found.")
+            console.print("Built-in strategies should be in the strategies/ directory.")
+            return
+
+        console.print("\n  [bold]Available strategies:[/bold]\n")
+        for path in strategies:
+            try:
+                s = Strategy.load(path)
+                params_str = ", ".join(
+                    f"{k}" + (" (required)" if v.get("required") else f"={v.get('default', '?')}")
+                    for k, v in s.params.items()
+                )
+                console.print(f"  [bold cyan]{s.name}[/bold cyan]")
+                console.print(f"    {s.description}")
+                if params_str:
+                    console.print(f"    [dim]Params: {params_str}[/dim]")
+                console.print()
+            except Exception as e:
+                console.print(f"  [red]{path.name}: {e}[/red]")
+        return
+
+    # Find and load the strategy
+    strategies = find_strategies()
+    strategy_path = None
+    for p in strategies:
+        if p.stem == strategy_name or p.stem.replace("-", "_") == strategy_name.replace("-", "_"):
+            strategy_path = p
+            break
+
+    if not strategy_path:
+        # Try as a direct file path
+        direct = Path(strategy_name)
+        if direct.exists():
+            strategy_path = direct
+        else:
+            console.print(f"[red]Strategy not found: {strategy_name}[/red]")
+            console.print("Run [bold]growth run --list[/bold] to see available strategies.")
+            sys.exit(1)
+
+    strategy = Strategy.load(strategy_path)
+
+    # Parse params
+    user_params = {}
+    for p_str in param:
+        if "=" in p_str:
+            k, _, v = p_str.partition("=")
+            # Try to parse as int/float
+            try:
+                v = int(v)
+            except ValueError:
+                try:
+                    v = float(v)
+                except ValueError:
+                    pass
+            user_params[k.strip()] = v
+
+    console.print(f"\n  [bold]Running strategy:[/bold] {strategy.name}")
+    if strategy.description:
+        console.print(f"  {strategy.description}")
+    if dry_run:
+        console.print("  [dim](dry run — nothing will be executed)[/dim]")
+    console.print()
+
+    from growth.engine.runner import run_strategy
+    state = asyncio.run(run_strategy(strategy, user_params, dry_run=dry_run))
+
+    if json_output:
+        click.echo(json.dumps(state, indent=2, default=str))
+    else:
+        # Print results
+        for step_id, step_state in state.get("steps", {}).items():
+            status = step_state.get("status", "?")
+            icon = {"success": "✅", "dry_run": "👁", "skipped": "⏭", "failed": "❌"}.get(status, "?")
+            console.print(f"  {icon} [bold]{step_id}[/bold]: {status}")
+
+            result = step_state.get("result", {})
+            if "results" in result:
+                items = result["results"][:5]
+                for item in items:
+                    title = item.get("title", item.get("text", ""))[:80]
+                    score = item.get("score", 0)
+                    console.print(f"      [{score}] {title}")
+
+            if step_state.get("error"):
+                console.print(f"      [red]{step_state['error']}[/red]")
+
+        console.print(f"\n  Status: [bold]{state['status']}[/bold]")
+        if state.get("errors"):
+            console.print(f"  Errors: {len(state['errors'])}")
+
+
+# ── Log ───────────────────────────────────────────────────────────────
+
+
+@main.group()
+def migrate():
+    """Migrate credentials from other tools."""
+    pass
+
+
+@migrate.command("from-openclaw")
+def migrate_from_openclaw_cmd():
+    """Import credentials from the old openclaw growth pipeline."""
+    from growth.identity.migrate import migrate_from_openclaw, OLD_SECRETS_DIR
+
+    if not OLD_SECRETS_DIR.exists():
+        console.print(f"[yellow]Old pipeline secrets not found at {OLD_SECRETS_DIR}[/yellow]")
+        return
+
+    console.print(f"\n  Scanning {OLD_SECRETS_DIR}...\n")
+    migrated = migrate_from_openclaw()
+
+    if migrated:
+        console.print(f"  [green]✅ Migrated {len(migrated)} identities:[/green]")
+        for name in migrated:
+            console.print(f"     {name}")
+        console.print(f"\n  No re-authentication needed. Run [bold]growth status[/bold] to verify.")
+    else:
+        console.print("  No credentials found to migrate.")
+
+
+@main.command("log")
+@click.option("--count", default=10, help="Number of recent entries")
+def show_log(count):
+    """Show recent activity from the output repo."""
+    from growth.output.logger import get_recent_posts
+
+    posts = get_recent_posts(count)
+    if not posts:
+        console.print("No activity logged yet.")
+        console.print("Posts will appear here after you use [bold]growth <platform> post[/bold]")
+        return
+
+    console.print(f"\n  [bold]Recent activity ({len(posts)} entries):[/bold]\n")
+    for p in posts:
+        platform = p.get("platform", "?")
+        identity = p.get("identity", "?")
+        posted_at = p.get("posted_at", "?")
+        url = p.get("url", "")
+        content = p.get("content", "")[:80]
+        console.print(f"  [dim]{posted_at}[/dim]  [cyan]{platform}[/cyan]  {identity}")
+        console.print(f"    {content}")
+        if url:
+            console.print(f"    [dim]{url}[/dim]")
+        console.print()
 
 
 # ── Twitter Commands ──────────────────────────────────────────────────
@@ -466,6 +637,12 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         limiter.record(identity.name, action)
         identity.last_used = __import__("datetime").datetime.now().isoformat()
         identity.save()
+
+        # Log to output repo
+        from growth.output.logger import log_post
+        log_post(platform, identity.name, text, {
+            "post_id": result.post_id, "url": result.url,
+        }, **kwargs)
 
         if json_output:
             click.echo(json.dumps({

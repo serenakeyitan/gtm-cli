@@ -1,0 +1,17 @@
+name: "HN Trending"
+description: "Fetch current Hacker News front page stories."
+version: "1.0"
+author: "growth-cli"
+
+identities: {}
+
+params:
+  count: { type: int, default: 15 }
+
+steps:
+  - id: trending
+    type: tool
+    platform: hn
+    action: trending
+    params:
+      count: "{{ params.count }}"
