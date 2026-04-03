@@ -30,6 +30,7 @@ class RedditSearchModule(Module):
         try:
             async with httpx.AsyncClient() as http:
                 resp = await http.get(url, params=search_params, headers={"User-Agent": "growth-cli/0.1"})
+                resp.raise_for_status()
                 posts = [p["data"] for p in resp.json().get("data", {}).get("children", [])]
             return ModuleResult(success=True, data=posts, metadata={"query": query, "count": len(posts)})
         except Exception as e:

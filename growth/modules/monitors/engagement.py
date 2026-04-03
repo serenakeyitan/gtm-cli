@@ -27,17 +27,21 @@ class EngagementTrackerModule(Module):
             try:
                 if platform == "twitter" and post_id:
                     eng = await fetch_twitter_engagement(post_id, context.identity_dir)
-                    results.append({**item, **eng})
                 elif platform == "reddit" and url:
                     eng = await fetch_reddit_engagement(url)
-                    results.append({**item, **eng})
                 elif platform == "hn" and post_id:
                     eng = await fetch_hn_engagement(post_id)
-                    results.append({**item, **eng})
                 else:
                     results.append(item)
+                    continue
+
+                # Check if the fetch itself returned an error dict
+                if eng.get("error"):
+                    results.append({**item, "engagement_error": eng["error"]})
+                    errors.append(f"{platform}:{post_id}: {eng['error']}")
+                else:
+                    results.append({**item, **eng})
             except Exception as e:
-                # Partial failure: keep the item, log the error
                 results.append({**item, "engagement_error": str(e)})
                 errors.append(f"{platform}:{post_id}: {e}")
 
