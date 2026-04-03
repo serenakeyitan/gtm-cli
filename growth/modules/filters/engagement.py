@@ -28,15 +28,13 @@ class EngagementFilterModule(Module):
 
         filtered = []
         for item in input_data.data:
-            # Platform-aware: only check thresholds for fields the item HAS
-            likes = item.get("favorite_count")       # Twitter only
-            score = item.get("score", item.get("points"))  # Reddit / HN only
-            rts = item.get("retweet_count")          # Twitter only
-            comments = item.get("num_comments", item.get("reply_count"))
+            # Support both raw platform keys AND normalized keys from traction tracker
+            likes = item.get("favorite_count") or item.get("likes")
+            score = item.get("score") or item.get("points")
+            rts = item.get("retweet_count") or item.get("retweets")
+            comments = item.get("num_comments") or item.get("reply_count") or item.get("comments")
 
             # Only apply a threshold if the item has that field
-            # This prevents Twitter items being killed by min_score,
-            # and Reddit/HN items being killed by min_likes
             if min_likes and likes is not None and likes < min_likes:
                 continue
             if min_score and score is not None and score < min_score:
