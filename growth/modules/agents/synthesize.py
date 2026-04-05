@@ -82,7 +82,7 @@ class SynthesizeModule(Module):
             # Fallback: return top N by engagement
             log.warning("LLM synthesis failed to return JSON, falling back to engagement sort")
             sorted_data = sorted(input_data.data,
-                                 key=lambda x: x["favorite_count"] if x.get("favorite_count") is not None else (x["score"] if x.get("score") is not None else (x.get("points") or 0)),
+                                 key=_safe_engagement_score,
                                  reverse=True)
             return ModuleResult(success=True, data=sorted_data[:output_count],
                                 metadata={"fallback": True})
@@ -92,11 +92,32 @@ class SynthesizeModule(Module):
         except Exception as e:
             # On ANY failure (rate limit, etc.), fall back to deterministic ranking
             log.warning("LLM synthesis failed (%s), falling back to engagement sort", e)
-            sorted_data = sorted(input_data.data,
-                                 key=lambda x: x["favorite_count"] if x.get("favorite_count") is not None else (x["score"] if x.get("score") is not None else (x.get("points") or 0)),
-                                 reverse=True)
-            return ModuleResult(success=True, data=sorted_data[:output_count],
-                                metadata={"fallback": True, "error": str(e)})
+            try:
+                sorted_data = sorted(input_data.data,
+                                     key=_safe_engagement_score,
+                                     reverse=True)
+                return ModuleResult(success=True, data=sorted_data[:output_count],
+                                    metadata={"fallback": True, "error": str(e)})
+            except Exception as sort_err:
+                # Even sort failed — return unsorted data (absolute last resort)
+                log.error("Fallback sort also failed: %s. Returning unsorted.", sort_err)
+                return ModuleResult(success=True, data=input_data.data[:output_count],
+                                    metadata={"fallback": True, "unsorted": True})
+
+
+def _safe_engagement_score(item: dict) -> int:
+    """Extract a numeric engagement score from any item, safely.
+
+    Handles None, strings, missing keys — always returns int.
+    """
+    for field in ("favorite_count", "score", "points", "likes"):
+        val = item.get(field)
+        if val is not None:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                continue
+    return 0
 
 
 register(SynthesizeModule())
