@@ -37,7 +37,7 @@ class PlatformAdaptModule(Module):
 
         for item in input_data.data:
             new_item = dict(item)
-            text = item.get(field, item.get("title", item.get("text", "")))
+            text = str(item.get(field, item.get("title", item.get("text", ""))) or "")
 
             if platform == "twitter":
                 new_item[field] = self._adapt_twitter(text)

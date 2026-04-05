@@ -60,7 +60,7 @@ class RewriteModule(Module):
 
         rewritten = []
         for item in items:
-            original = item.get(field, item.get("title", item.get("text", "")))
+            original = str(item.get(field, item.get("title", item.get("text", ""))) or "")
             if not original:
                 rewritten.append(item)
                 continue
@@ -73,13 +73,12 @@ class RewriteModule(Module):
             )
 
             try:
-                result = await query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1)
-                # Extract text from result
-                rewritten_text = ""
-                for block in result:
-                    if hasattr(block, "content"):
-                        rewritten_text = block.content
+                result_text = ""
+                async for message in query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1):
+                    if hasattr(message, "content"):
+                        result_text = message.content
                         break
+                rewritten_text = result_text
 
                 new_item = dict(item)
                 new_item[f"{field}_original"] = original

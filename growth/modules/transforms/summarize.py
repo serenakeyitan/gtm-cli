@@ -33,8 +33,9 @@ class SummarizeModule(Module):
         method = params.get("method", "truncate")
         results = []
 
+        truncated_count = 0
         for item in input_data.data:
-            text = item.get(field, "")
+            text = str(item.get(field, "") or "")
             new_item = dict(item)
 
             if len(text) <= max_len:
@@ -52,10 +53,11 @@ class SummarizeModule(Module):
             else:
                 new_item[field] = self._smart_truncate(text, max_len)
 
+            truncated_count += 1
             results.append(new_item)
 
         return ModuleResult(success=True, data=results,
-                            metadata={"truncated": sum(1 for r in results if f"{field}_original" in r or len(r.get(field, "")) < len(input_data.data[0].get(field, "") if input_data.data else ""))})
+                            metadata={"truncated": truncated_count})
 
     def _smart_truncate(self, text: str, max_len: int) -> str:
         """Truncate at sentence or word boundary."""
@@ -83,10 +85,9 @@ class SummarizeModule(Module):
             f"Summarize this text in {max_len} characters or fewer. "
             f"Keep the key information. Output ONLY the summary.\n\n{text}"
         )
-        result = await query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1)
-        for block in result:
-            if hasattr(block, "content"):
-                return block.content[:max_len]
+        async for message in query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1):
+            if hasattr(message, "content"):
+                return message.content[:max_len]
         return self._smart_truncate(text, max_len)
 
 

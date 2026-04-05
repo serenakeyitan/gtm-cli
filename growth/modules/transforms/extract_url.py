@@ -41,23 +41,27 @@ class ExtractUrlModule(Module):
         errors = []
 
         for item in input_data.data:
-            text = item.get(field, item.get("text", ""))
+            text = str(item.get(field, item.get("text", "")) or "")
             urls = re.findall(r'https?://\S+', text)
 
-            # Filter to external URLs (not twitter/x.com)
+            # Filter to external URLs, resolve shorteners first
             external_urls = []
             for url in urls:
                 url = url.rstrip(".,;:!?)")
                 domain = _extract_domain(url)
-                if domain and domain not in ("x.com", "twitter.com"):
-                    external_urls.append(url)
-                elif domain in SHORTENER_DOMAINS and resolve:
+
+                # Resolve shorteners FIRST (t.co, bit.ly, etc.)
+                if domain in SHORTENER_DOMAINS and resolve:
                     try:
-                        resolved = await _resolve_url(url)
-                        if resolved and _extract_domain(resolved) not in ("x.com", "twitter.com"):
-                            external_urls.append(resolved)
+                        url = await _resolve_url(url)
+                        domain = _extract_domain(url)
                     except Exception as e:
                         errors.append(f"Failed to resolve {url}: {e}")
+                        continue
+
+                # Then filter out twitter/x.com links
+                if domain and domain not in ("x.com", "twitter.com"):
+                    external_urls.append(url)
 
             new_item = dict(item)
             new_item["extracted_urls"] = external_urls
