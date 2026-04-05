@@ -86,9 +86,10 @@ class SummarizeModule(Module):
             f"Keep the key information. Output ONLY the summary.\n\n{text}"
         )
         async for message in query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1):
-            text = _extract_text(message)
-            if text:
-                return text[:max_len]
+            extracted = _extract_text(message)
+            if extracted:
+                return extracted[:max_len]
+        # LLM returned nothing — fall back to truncating the original text
         return self._smart_truncate(text, max_len)
 
 
