@@ -39,9 +39,13 @@ class TestAgentModule(Module):
             config = _build_agent_config(IDENTITIES_DIR)
             state = RunState.create("growth-cli-test")
             tested = []
-            for build in input_data.data:
+            for i, build in enumerate(input_data.data):
                 # Legacy agent expects {"build": dict, "idea": dict, "config": config}
-                result = await run_tester(state, {"build": build, "idea": build, "config": config})
+                # Ensure idea has an 'id' field for traceability
+                idea = dict(build)
+                if "id" not in idea:
+                    idea["id"] = idea.get("idea_id", idea.get("repo_name", f"item_{i}"))
+                result = await run_tester(state, {"build": build, "idea": idea, "config": config})
                 if isinstance(result, dict):
                     tested.append(result)
 

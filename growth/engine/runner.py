@@ -243,6 +243,7 @@ def _build_agent_config(identities_dir: Path) -> Any:
             self.target_subreddits = ["SaaS", "startups", "programming"]
             self.session_dir = str(identities_dir / "reddit")
             self.post_stagger_seconds = 15
+            self.post_stagger_hours = 0      # Legacy field (promoter reads this)
             self.max_subreddits_per_idea = 3
 
     class _HNConfig:
