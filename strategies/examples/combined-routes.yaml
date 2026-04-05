@@ -1,0 +1,91 @@
+name: "Combined Routes (Route 1 + Route 2)"
+description: |
+  Compose the two original growth pipeline routes into one campaign:
+  - Route 1 path: Scout Twitter → filter → adapt for Reddit → ready to post
+  - Route 2 path: Scout Twitter → extract URLs → adapt for HN → ready to submit
+  Both routes share the same Twitter scout (run once), then branch in parallel.
+  Uses only atomic tool modules — no LLM agents needed.
+version: "2.0"
+
+identities:
+  twitter_account: { platform: twitter }
+  reddit_account: { platform: reddit }
+  hn_account: { platform: hn }
+
+params:
+  query: { default: "AI open source tools" }
+  min_likes: { default: 100 }
+  count: { default: 10 }
+
+modules:
+  # ═══ SHARED: Twitter Scout (runs once, feeds both routes) ═══
+  scout:
+    use: twitter/search
+    as: $twitter_account
+    params:
+      query: "{{ query }}"
+      count: "{{ count }}"
+
+  filter_hot:
+    use: filter/engagement
+    input: scout
+    params:
+      min_likes: "{{ min_likes }}"
+
+  # ═══ ROUTE 1 PATH: Twitter → Reddit ═══
+  r1_keywords:
+    use: filter/keyword
+    input: filter_hot
+    params:
+      include: ["open source", "github", "launch", "built", "released"]
+
+  r1_dedupe:
+    use: filter/deduplicate
+    input: r1_keywords
+
+  r1_adapt:
+    use: transform/platform_adapt
+    input: r1_dedupe
+    params:
+      platform: reddit
+
+  r1_limit:
+    use: filter/limit
+    input: r1_adapt
+    params:
+      count: 3
+      sort_by: favorite_count
+
+  # ═══ ROUTE 2 PATH: Twitter → HN ═══
+  r2_extract:
+    use: transform/extract_url
+    input: filter_hot
+
+  r2_has_url:
+    use: control/condition
+    input: r2_extract
+    params:
+      field: source_url
+      operator: ne
+      value: ""
+
+  r2_adapt:
+    use: transform/platform_adapt
+    input: r2_has_url
+    params:
+      platform: hn
+
+  r2_limit:
+    use: filter/limit
+    input: r2_adapt
+    params:
+      count: 3
+      sort_by: favorite_count
+
+  # ═══ MONITOR: Track what we'd post ═══
+  # Both routes complete → merge results for summary
+  summary:
+    use: filter/limit
+    input: [r1_limit, r2_limit]
+    params:
+      count: 6

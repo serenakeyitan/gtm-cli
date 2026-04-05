@@ -347,12 +347,13 @@ def run_strategy_cmd(strategy_name, list_strategies, dry_run, param, json_output
                     pass
             user_params[k.strip()] = v
 
-    console.print(f"\n  [bold]Running strategy:[/bold] {strategy.name}")
-    if strategy.description:
-        console.print(f"  {strategy.description}")
-    if dry_run:
-        console.print("  [dim](dry run — nothing will be executed)[/dim]")
-    console.print()
+    if not json_output:
+        console.print(f"\n  [bold]Running strategy:[/bold] {strategy.name}")
+        if strategy.description:
+            console.print(f"  {strategy.description}")
+        if dry_run:
+            console.print("  [dim](dry run — nothing will be executed)[/dim]")
+        console.print()
 
     # Use DAG runner for v0.2 module-based strategies, legacy runner for v0.1 step-based
     try:
