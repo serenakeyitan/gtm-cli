@@ -76,6 +76,7 @@ def _ensure_loaded() -> None:
     # Import all module packages to trigger registration
     _safe_import("growth.modules.sources")
     _safe_import("growth.modules.filters")
+    _safe_import("growth.modules.transforms")
     _safe_import("growth.modules.actions")
     _safe_import("growth.modules.monitors")
 
