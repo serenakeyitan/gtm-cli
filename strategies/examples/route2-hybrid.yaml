@@ -12,7 +12,6 @@ identities:
   twitter_account: { platform: twitter }
 
 params:
-  accounts: { default: "karpathy,AndrewYNg,ylaboratory,OpenAI" }
   min_likes: { default: 1000 }
   top_n: { default: 3 }
 

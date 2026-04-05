@@ -82,7 +82,7 @@ class SynthesizeModule(Module):
             # Fallback: return top N by engagement
             log.warning("LLM synthesis failed to return JSON, falling back to engagement sort")
             sorted_data = sorted(input_data.data,
-                                 key=lambda x: x.get("favorite_count", x.get("score", x.get("points", 0))),
+                                 key=lambda x: x.get("favorite_count") or x.get("score") or x.get("points") or 0,
                                  reverse=True)
             return ModuleResult(success=True, data=sorted_data[:output_count],
                                 metadata={"fallback": True})
@@ -93,7 +93,7 @@ class SynthesizeModule(Module):
             # On ANY failure (rate limit, etc.), fall back to deterministic ranking
             log.warning("LLM synthesis failed (%s), falling back to engagement sort", e)
             sorted_data = sorted(input_data.data,
-                                 key=lambda x: x.get("favorite_count", x.get("score", x.get("points", 0))),
+                                 key=lambda x: x.get("favorite_count") or x.get("score") or x.get("points") or 0,
                                  reverse=True)
             return ModuleResult(success=True, data=sorted_data[:output_count],
                                 metadata={"fallback": True, "error": str(e)})
