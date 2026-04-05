@@ -3,278 +3,192 @@
 > Claude Code gave developers a terminal for everything.  
 > **growth-cli gives marketers the same.**
 
-One terminal. Every platform. No more switching between Twitter, Reddit, and HN dashboards. No more copy-pasting across tabs.
-
-Your accounts, your strategies, your terminal.
+One terminal. Every platform. No more switching between Twitter, Reddit, and HN dashboards.
 
 ```bash
 $ growth twitter user karpathy --count 3
   @karpathy — latest 3 tweets:
-
   LLM Knowledge Bases...                    ❤️ 11,025  🔁 1,124
   New supply chain attack for npm axios...  ❤️ 10,444  🔁 1,121
-  Drafted a blog post, asked LLM to argue   ❤️ 30,946  🔁 2,407
-    the opposite. It demolished me. lol.
 
 $ growth hn top --count 3
-  1. [1558] LinkedIn is searching your browser extensions
-  2. [1131] Google releases Gemma 4 open models
-  3. [440] Lemonade by AMD: open source local LLM server
+  1. [1586] LinkedIn is searching your browser extensions
+  2. [1207] Google releases Gemma 4 open models
 
-$ growth run cross-search -p query="AI agents"
-  ✅ twitter_search: 5 results
-  ✅ reddit_search: 5 results
-  ✅ hn_search: 5 results
+$ growth run combined-routes -p query="AI open source" -p min_likes=10
+  ✅ scout          twitter/search (16 items)
+  ✅ filter_hot     filter/engagement (8 items)
+  ✅ r1_keywords    filter/keyword (5 items)       ─┐ Route 1 → Reddit
+  ✅ r1_adapt       transform/platform_adapt (5)    ─┘
+  ✅ r2_extract     transform/extract_url (8 items) ─┐ Route 2 → HN
+  ✅ r2_adapt       transform/platform_adapt (4)    ─┘
+  ✅ summary        filter/limit (6 items)
   Status: completed
 ```
 
-## Who This Is For
-
-**Go-to-market engineers and growth engineers** who already live in the terminal. You build features in Claude Code, then switch to 3 browser tabs to market them. Stop switching. Do it all from here.
-
-## Install — 60 Seconds
+## Install
 
 ```bash
 pip install -e .
 growth init
-```
-
-Then connect your accounts:
-
-```bash
-growth auth twitter
+growth auth twitter    # paste Cookie-Editor export
 growth auth reddit
 growth auth hn
 ```
 
-Each platform asks you to paste cookies from the [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) browser extension. One click export, one paste. Done.
-
 ### Inside Claude Code
 
-Paste this into Claude Code and it handles everything:
+```
+Install growth-cli: run `pip install -e /path/to/growth-cli && growth init`
+then help me connect my social media accounts.
+```
 
-> Install growth-cli: run `pip install -e /path/to/growth-cli && growth init` then help me connect my social media accounts. After setup, run `growth run --list` to show available strategies.
+## 30 Composable Modules
 
-## What You Can Do
-
-### Read — Eyes on Every Platform
+Every piece is a Lego block. Compose them into any strategy.
 
 ```bash
-# Twitter
+$ growth modules list
+  SOURCES (5)     twitter/search, twitter/user_tweets, reddit/search, hn/search, hn/top_stories
+  FILTERS (4)     filter/engagement, filter/keyword, filter/deduplicate, filter/limit
+  TRANSFORMS (4)  transform/rewrite, transform/extract_url, transform/platform_adapt, transform/summarize
+  ACTIONS (5)     twitter/post, twitter/like, twitter/retweet, reddit/submit, hn/submit_link
+  CONTROL (4)     control/delay, control/jitter, control/for_each, control/condition
+  AGENTS (7)      agent/scout, agent/novelty_check, agent/build, agent/test,
+                  agent/promote_reddit, agent/promote_hn, agent/synthesize
+  MONITORS (1)    track/engagement
+  STRATEGIES (8+) Any strategy YAML is also a composable module
+```
+
+### Cross-Platform Pipelines
+
+```yaml
+# hn-to-reddit.yaml — scrape HN, filter, adapt, post to Reddit
+modules:
+  scrape:    { use: hn/top_stories, params: { count: 10 } }
+  hot:       { use: filter/engagement, input: scrape, params: { min_score: 300 } }
+  adapt:     { use: transform/platform_adapt, input: hot, params: { platform: reddit } }
+```
+
+```yaml
+# twitter-to-hn.yaml — scrape Twitter, extract URLs, submit to HN
+modules:
+  scout:     { use: twitter/search, params: { query: "AI tools" } }
+  urls:      { use: transform/extract_url, input: scout }
+  clean:     { use: transform/platform_adapt, input: urls, params: { platform: hn } }
+```
+
+### Parallel Execution
+
+Modules with no mutual dependencies run simultaneously:
+
+```yaml
+modules:
+  twitter: { use: twitter/search, params: { query: "AI" } }    # ─┐
+  reddit:  { use: reddit/search, params: { query: "AI" } }     # ─┤ PARALLEL
+  hn:      { use: hn/search, params: { query: "AI" } }         # ─┘
+  merge:   { use: filter/limit, input: [twitter, reddit, hn] } # waits for all 3
+```
+
+### Strategies Compose Into Bigger Strategies
+
+```yaml
+# full-launch.yaml
+modules:
+  hn_launch:     { use: strategy/hn-scout-and-filter, params: { ... } }
+  reddit_launch: { use: strategy/reddit-to-twitter, params: { ... } }
+  combined:      { use: filter/limit, input: [hn_launch, reddit_launch] }
+```
+
+## Direct Commands
+
+```bash
+# Search
 growth twitter search "AI agents" --count 10
 growth twitter user karpathy --count 5
-
-# Reddit
-growth reddit search "launch strategy" --sub startups --count 10
-
-# Hacker News
-growth hn search "Show HN" --count 10
+growth reddit search "launch strategy" --sub startups
+growth hn search "Show HN"
 growth hn top --count 15
-```
 
-### Write — Post From Your Terminal
-
-```bash
-# Preview first (always)
+# Post (rate-limited, safe)
 growth twitter post "Just shipped v2! 🚀" --dry-run
-growth reddit submit --sub test --title "Hello" --body "From the terminal" --dry-run
-growth hn submit --title "Show HN: My Project" --url "https://example.com" --dry-run
+growth reddit submit --sub SaaS --title "..." --body "..." --dry-run
+growth hn submit --title "Show HN: ..." --url "..." --dry-run
 
-# Post for real
-growth twitter post "Just shipped v2! 🚀"
-growth reddit submit --sub SaaS --title "Show r/SaaS: My Project" --body "..."
+# Strategies
+growth run --list                          # see all + execution mode
+growth run combined-routes -p query="AI"   # run a strategy
+growth run cross-platform-scout --dry-run  # preview
+growth modules create my-strategy          # scaffold new YAML
+
+# Track
+growth traction                            # live engagement metrics
+growth traction --json                     # for agent analysis
+growth status                              # connected accounts
+growth log                                 # recent activity
 ```
 
-### Run — Composable Strategies
+## Architecture: Direct API First, LLM Last
 
-```bash
-# List available strategies
-growth run --list
+**Default to direct API calls.** Only use LLM when a task genuinely requires reasoning.
 
-# Scout Twitter for trending topics
-growth run twitter-scout -p query="growth hacking" -p count=10
+| Approach | API Calls | Speed | Cost | When |
+|----------|-----------|-------|------|------|
+| Module DAG (default) | 0 Claude calls | 30 sec | $0.00 | Scrape, filter, transform, post |
+| Hybrid | 1 Claude call | 60 sec | $0.01 | Need intelligent selection |
+| Full LLM Agent (legacy) | ~175 Claude calls | 30 min | $1.00 | Need creative writing, code generation |
 
-# Get HN front page
-growth run hn-trending -p count=10
+If LLM fails (rate limit, API down), deterministic fallback always produces output.
 
-# Search across all platforms at once
-growth run cross-search -p query="open source marketing"
-
-# Dry-run any strategy
-growth run cross-search --dry-run -p query="AI"
-
-# Write your own strategy (YAML)
-growth run ./my-strategy.yaml -p topic="my product"
-```
-
-Strategies live in two places:
-- **Your strategies**: `~/.config/growth/strategies/` (local, private, never on GitHub)
-- **Examples**: `strategies/examples/` in the repo (samples to learn from)
-
-### Track — Live Engagement Metrics
-
-```bash
-# Check how your posts are performing
-growth traction
-
-  🐦 twitter  2026-03-27
-     Just shipped v2! 🚀
-     ❤️ 142  🔁 23  💬 12  👁 8,401
-
-  🤖 reddit  2026-03-27
-     Show r/SaaS: growth-cli
-     ⬆️ 38  💬 7  📊 0.92
-
-  🟠 hn  2026-03-27
-     Show HN: growth-cli
-     ▲ 23  💬 4
-
-# JSON for agent consumption
-growth traction --json
-
-# Skip live refresh (use cached data)
-growth traction --no-refresh
-```
-
-Fetches live data from each platform's API. Snapshots are saved to the output repo for historical tracking.
-
-Inside Claude Code, ask "how are my posts doing?" and the agent will run `growth traction --json`, analyze the numbers, and give you actionable recommendations.
-
-### Manage — Accounts & Activity
-
-```bash
-growth status              # Show connected accounts
-growth log                 # Show recent activity
-growth migrate from-openclaw  # Import from old pipeline
-```
+See [docs/architecture-principles.md](./docs/architecture-principles.md) for details.
 
 ## Account Safety
 
-**Built-in rate limits protect your accounts from day one.** You cannot accidentally spam. The rate limiter is always on — conservative defaults well below platform detection thresholds.
+Rate limits are always on. Cannot be bypassed.
 
 ```
-Twitter:  2 posts/hr,  6/day,  5min cooldown between posts
-Reddit:   1 post/hr,   3/day, 10min cooldown
+Twitter:  2 posts/hr, 6/day, 5min cooldown
+Reddit:   1 post/hr, 3/day, 10min cooldown
 HN:       1 submit/hr, 2/day, 30min cooldown
 ```
 
-If you hit a limit, growth-cli tells you exactly how long to wait:
+⚠️ Use burner accounts, not your personal ones.
+
+## Strategy Locations
 
 ```
-⏳ Rate limit: Cooldown active (4m 56s remaining)
-   Wait 4m 56s or use --force (risky!)
-```
-
-`--force` exists but prints a scary warning. You can wait. You can't un-ban your account.
-
-### ⚠️ Use Burner Accounts
-
-growth-cli automates actions on social media. Platform detection is always a risk. **Use dedicated accounts, not your personal ones.** Future versions will offer pre-warmed accounts for purchase.
-
-## How Auth Works
-
-Each platform uses cookies — no API keys needed.
-
-| Platform | Auth Method | What You Do |
-|----------|------------|-------------|
-| Twitter | Cookie paste | Export from Cookie-Editor, paste JSON |
-| Reddit | Cookie paste | Export from Cookie-Editor, paste JSON |
-| HN | Cookie paste | Export from Cookie-Editor, paste JSON |
-
-Credentials are stored locally at `~/.config/growth/identities/` with `0700` permissions. **Never in git. Never uploaded anywhere.**
-
-Cookies expire. When they do, you'll see:
-
-```
-🔑 Session expired
-
-  Re-authenticate:  growth auth twitter
-```
-
-## Write Your Own Strategy
-
-Strategies are YAML files. They define **what steps to run, in what order** — agents generate the actual content at runtime.
-
-```yaml
-# strategies/my-strategy.yaml
-name: "My Launch Strategy"
-description: "Scout trends then search Reddit for related discussions"
-
-identities:
-  twitter_account: { platform: twitter }
-
-params:
-  topic: { type: str, required: true }
-  count: { type: int, default: 10 }
-
-steps:
-  - id: scout
-    type: tool
-    platform: twitter
-    action: search
-    as: $twitter_account
-    params:
-      query: "{{ params.topic }}"
-      count: "{{ params.count }}"
-
-  - id: reddit_research
-    type: tool
-    platform: reddit
-    action: search
-    after: scout
-    params:
-      query: "{{ params.topic }}"
-      count: "{{ params.count }}"
-```
-
-```bash
-growth run ./strategies/my-strategy.yaml -p topic="AI coding agents"
-```
-
-## JSON Output
-
-Every command supports `--json` for agent consumption:
-
-```bash
-growth twitter user karpathy --count 1 --json
-growth hn top --count 5 --json
-growth run hn-trending --json -p count=3
+~/.config/growth/strategies/    Your strategies (local, private, never on GitHub)
+strategies/examples/            Sample strategies (shipped with repo, 8 examples)
 ```
 
 ## Project Structure
 
 ```
-~/.config/growth/               Your private data (never in git)
-├── config.yaml                 Settings
-├── identities/                 Cookies & sessions (0700)
-│   ├── twitter/<username>/
-│   ├── reddit/<username>/
-│   └── hn/<username>/
-├── rate_limits/state.json      Rate limit counters
-└── output/                     Git repo: drafts, posts, run logs
+growth/
+├── cli.py              CLI entry point
+├── config.py            XDG config (~/.config/growth/)
+├── modules/             30 composable modules
+│   ├── sources/         Scrape platforms (5)
+│   ├── filters/         Process data (4)
+│   ├── transforms/      Adapt content (4)
+│   ├── actions/         Post/engage (5)
+│   ├── control/         Flow logic (4)
+│   ├── agents/          LLM-powered (7 + strategy wrapper)
+│   └── monitors/        Track results (1)
+├── platforms/           Twitter, Reddit, HN adapters
+├── engine/              DAG runner + legacy runner
+├── identity/            Account management
+├── safety/              Rate limiter
+└── output/              Git-backed logger + traction
 
-growth-cli/                     The tool (open source)
-├── growth/
-│   ├── cli.py                  Click CLI
-│   ├── platforms/              Twitter, Reddit, HN adapters
-│   ├── safety/                 Rate limiter
-│   ├── engine/                 Strategy loader + runner
-│   ├── identity/               Account management
-│   └── output/                 Git-backed logger
-├── strategies/                 Built-in strategies (YAML)
-└── SKILL.md                    Claude Code integration
+prompts/                 Style guides + agent prompts (7 files)
+strategies/examples/     Sample strategies (8 YAML files)
 ```
 
 ## Roadmap
 
-- [x] **v0.1** — CLI, 3 platforms, rate limiter, strategies, auth, traction tracker
-- [ ] **v0.2** — Multi-account, proxy support, advanced rate limiting
-- [ ] **v0.3** — Chat TUI, content generation, social listening, traction alerts
-- [ ] **v0.4** — Growth Cloud (buy pre-warmed accounts & IPs)
-- [ ] **v0.5** — GitHub PR workflow for content review
-- [ ] **v1.0** — Public launch
-- [ ] **v2.0** — Plugin system, strategy marketplace, team features
+See [ROADMAP.md](./ROADMAP.md) for full phase-by-phase progress with showcases.
 
 ## License
 
-Apache 2.0 — Free to use, modify, distribute. See [LICENSE](./LICENSE).
+Apache 2.0 — See [LICENSE](./LICENSE).

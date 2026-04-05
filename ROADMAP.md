@@ -2,11 +2,9 @@
 
 > Single source of truth for all phases, milestones, and status.
 
-**Design Specs:**
-- [v0.1 Full Spec](./docs/design-spec-v01.md) — architecture, identity, safety, onboarding
-- [v0.2 Module System Spec](./docs/design-spec-v02-modules.md) — composability, DAG runner, module registry
-
-**Codex Review Log:** [CODEX_REVIEWS.md](./CODEX_REVIEWS.md)
+**Architecture:** [docs/architecture-principles.md](./docs/architecture-principles.md)  
+**Agent Instructions:** [AGENTS.md](./AGENTS.md)  
+**Codex Reviews:** `.codex-reviews/` (auto-generated per commit)
 
 ---
 
