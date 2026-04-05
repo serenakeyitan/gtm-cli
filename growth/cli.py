@@ -532,7 +532,7 @@ def modules_create(name, description):
             return
 
     # Escape YAML special chars in user input
-    safe_desc = (description or "My custom strategy").replace('"', '\\"').replace('\n', ' ')
+    safe_desc = (description or "My custom strategy").replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ')
 
     template = f"""name: "{safe_name}"
 description: "{safe_desc}"

@@ -54,23 +54,30 @@ class StrategyModule(Module):
         }
         self._raw = data
 
-    # Track recursion to prevent infinite loops
-    _active_strategies: set[str] = set()
     MAX_DEPTH = 5
 
     async def run(self, input_data, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
         """Execute the sub-strategy and return its results as a ModuleResult."""
-        # Cycle/depth guard
-        if self.name in StrategyModule._active_strategies:
-            return ModuleResult(success=False, errors=[f"Cycle detected: {self.name} is already running"])
-        if len(StrategyModule._active_strategies) >= self.MAX_DEPTH:
-            return ModuleResult(success=False, errors=[f"Max nesting depth ({self.MAX_DEPTH}) exceeded"])
+        # Per-call-stack cycle/depth guard using context
+        # Each call chain carries its own ancestry set — safe for parallel execution
+        ancestry = getattr(context, '_strategy_ancestry', set())
 
-        StrategyModule._active_strategies.add(self.name)
-        try:
-            return await self._execute(params, context)
-        finally:
-            StrategyModule._active_strategies.discard(self.name)
+        if self.name in ancestry:
+            return ModuleResult(success=False, errors=[f"Cycle detected: {self.name} is already in the call chain: {ancestry}"])
+        if len(ancestry) >= self.MAX_DEPTH:
+            return ModuleResult(success=False, errors=[f"Max nesting depth ({self.MAX_DEPTH}) exceeded: {ancestry}"])
+
+        # Pass ancestry down to sub-strategies via context
+        child_context = ModuleContext(
+            identity_dir=context.identity_dir,
+            identity_name=context.identity_name,
+            rate_limiter=context.rate_limiter,
+            config=context.config,
+            dry_run=context.dry_run,
+        )
+        child_context._strategy_ancestry = ancestry | {self.name}
+
+        return await self._execute(params, child_context)
 
     async def _execute(self, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
         from growth.engine.dag_runner import run_dag_strategy
