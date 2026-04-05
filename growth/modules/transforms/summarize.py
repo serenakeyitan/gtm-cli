@@ -86,9 +86,29 @@ class SummarizeModule(Module):
             f"Keep the key information. Output ONLY the summary.\n\n{text}"
         )
         async for message in query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1):
-            if hasattr(message, "content"):
-                return message.content[:max_len]
+            text = _extract_text(message)
+            if text:
+                return text[:max_len]
         return self._smart_truncate(text, max_len)
+
+
+def _extract_text(message) -> str:
+    """Extract plain text from a Claude SDK message."""
+    if hasattr(message, "result") and isinstance(message.result, str):
+        return message.result
+    if hasattr(message, "content"):
+        content = message.content
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            texts = []
+            for block in content:
+                if hasattr(block, "text"):
+                    texts.append(block.text)
+                elif isinstance(block, str):
+                    texts.append(block)
+            return "\n".join(texts)
+    return ""
 
 
 register(SummarizeModule())

@@ -73,12 +73,11 @@ class RewriteModule(Module):
             )
 
             try:
-                result_text = ""
+                rewritten_text = ""
                 async for message in query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1):
-                    if hasattr(message, "content"):
-                        result_text = message.content
+                    rewritten_text = _extract_text(message)
+                    if rewritten_text:
                         break
-                rewritten_text = result_text
 
                 new_item = dict(item)
                 new_item[f"{field}_original"] = original
@@ -90,6 +89,33 @@ class RewriteModule(Module):
                 rewritten.append(item)
 
         return rewritten
+
+
+def _extract_text(message) -> str:
+    """Extract plain text from a Claude SDK message.
+
+    Handles AssistantMessage (content=[TextBlock(text=...)]),
+    ResultMessage (result=str), and plain string content.
+    """
+    # ResultMessage
+    if hasattr(message, "result") and isinstance(message.result, str):
+        return message.result
+
+    # AssistantMessage with content blocks
+    if hasattr(message, "content"):
+        content = message.content
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            texts = []
+            for block in content:
+                if hasattr(block, "text"):
+                    texts.append(block.text)
+                elif isinstance(block, str):
+                    texts.append(block)
+            return "\n".join(texts)
+
+    return ""
 
 
 register(RewriteModule())
