@@ -41,25 +41,25 @@ def load_style_guide(platform: str | None = None) -> str:
         "twitter": "### Twitter",
     }
     
-    header = platform_headers.get(platform.lower())
+    platform_key = platform.strip().lower()
+    header = platform_headers.get(platform_key)
     if not header:
+        log.warning("Unknown platform '%s' for style guide. Available: %s", platform, list(platform_headers.keys()))
         return full_guide
     
     start = full_guide.find(header)
     if start == -1:
         return full_guide
     
-    # Find the next ### header or --- separator
-    next_section = full_guide.find("\n### ", start + len(header))
-    next_separator = full_guide.find("\n---", start + len(header))
-    
-    end = len(full_guide)
-    if next_section != -1:
-        end = min(end, next_section)
-    if next_separator != -1:
-        end = min(end, next_separator)
-    
-    return full_guide[start:end].strip()
+    # Extract from this header to the next same-level (###) header or end marker (---)
+    # Only match "\n### " at the start of a line to avoid matching deeper headings
+    import re
+    section_text = full_guide[start:]
+    # Match the next "### " at line start (same level heading) or "---" separator
+    match = re.search(r'\n(?=### [A-Z]|\n---)', section_text[len(header):])
+    if match:
+        return section_text[:len(header) + match.start()].strip()
+    return section_text.strip()
 
 
 def validate_ideas_output(data: Any) -> list[dict[str, Any]]:
