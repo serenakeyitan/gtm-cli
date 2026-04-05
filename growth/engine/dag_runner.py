@@ -85,6 +85,8 @@ async def run_dag_strategy(
     results: dict[str, ModuleResult] = {}
 
     for batch in _parallel_batches(execution_order, dag):
+        # Separate skipped vs runnable modules — track names for correct zip
+        runnable_names = []
         tasks = []
         for module_name in batch:
             # Skip if any upstream dependency failed
@@ -97,6 +99,7 @@ async def run_dag_strategy(
                 continue
 
             mod_def = modules_def[module_name]
+            runnable_names.append(module_name)
             tasks.append(_run_module(
                 module_name, mod_def, results, resolved_params,
                 identities_def, mgr, dry_run, state,
@@ -105,14 +108,14 @@ async def run_dag_strategy(
         # Run batch in parallel
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for module_name, result in zip(batch, batch_results):
+        # Zip with runnable_names (not batch) to avoid misalignment
+        for module_name, result in zip(runnable_names, batch_results):
             if isinstance(result, Exception):
                 log.error("Module [%s] failed: %s", module_name, result)
                 state["modules"][module_name] = {"status": "failed", "error": str(result)}
                 state["errors"].append(f"{module_name}: {result}")
                 results[module_name] = ModuleResult(success=False, errors=[str(result)])
             elif not result.success:
-                # Module returned failure without exception
                 state["errors"].append(f"{module_name}: {'; '.join(result.errors)}")
                 results[module_name] = result
             else:
@@ -206,8 +209,11 @@ async def _run_module(
             context.identity_dir = identity.identity_dir
             context.identity_name = identity.name
         except ValueError as e:
-            state["modules"][name] = {"status": "failed", "error": f"Auth required: {e}"}
-            return ModuleResult(success=False, errors=[f"Auth required: {e}"])
+            if not dry_run:
+                state["modules"][name] = {"status": "failed", "error": f"Auth required: {e}"}
+                return ModuleResult(success=False, errors=[f"Auth required: {e}"])
+            # In dry-run, proceed without auth — module handles it internally
+            log.debug("Module [%s]: auth not available (dry-run, continuing)", name)
 
     # Execute
     log.debug("Module [%s] params keys: %s", name, list(params.keys()))  # Don't log values (may contain secrets)
