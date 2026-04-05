@@ -149,7 +149,7 @@
 | Video demo / walkthrough | ⬜ |
 | Landing page + pricing | ⬜ |
 | Launch campaign (dogfooding growth-cli) | ⬜ |
-| BSL license setup | ⬜ |
+| Apache 2.0 license setup | ⬜ |
 
 ---
 

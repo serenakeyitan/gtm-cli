@@ -5,7 +5,7 @@
 **Author:** Serena Key  
 **Date:** 2026-03-27  
 **Status:** Draft — awaiting review before implementation  
-**License:** BSL (Business Source License)
+**License:** Apache 2.0
 
 ---
 
@@ -50,7 +50,7 @@ growth-cli is a **terminal-native marketing automation tool** that lets go-to-ma
 1. **Terminal-native.** Everything happens in the terminal / inside Claude Code. No web UI.
 2. **Account safety first.** Built-in rate limits protect user accounts from day one. Users wait longer, but accounts don't get banned.
 3. **Composable.** Strategies are modular YAML files. Platform modules are pluggable. Everything is remixable.
-4. **Open core.** The tool is open source (BSL). Monetization comes later through managed account/IP infrastructure (one-time purchase, not rental).
+4. **Open core.** The tool is open source (Apache 2.0). Monetization comes later through managed account/IP infrastructure (one-time purchase, not rental).
 5. **Agent-friendly.** Works equally well when a human types commands or when an AI agent calls them inside Claude Code.
 
 ### Business Model (Future — Not v0.1)
@@ -128,7 +128,7 @@ growth-cli is a **terminal-native marketing automation tool** that lets go-to-ma
 growth-cli/
 ├── pyproject.toml                     # Package definition, dependencies
 ├── README.md                          # "Claude Code for marketers" pitch
-├── LICENSE                            # BSL
+├── LICENSE                            # Apache 2.0
 ├── SKILL.md                           # Claude Code skill integration
 ├── AGENTS.md                          # Agent discovery + setup instructions
 ├── CONTRIBUTING.md
@@ -1071,7 +1071,7 @@ v1.0 — "Public launch"                                   Weeks 18-20
   ☐ Video demo / walkthrough
   ☐ Landing page + pricing
   ☐ Launch campaign (dogfooding growth-cli to launch growth-cli)
-  ☐ BSL license setup
+  ☐ Apache 2.0 license setup
 
 v2.0 — "Ecosystem" (future)
 ────────────────────────────

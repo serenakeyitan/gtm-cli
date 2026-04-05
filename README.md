@@ -277,6 +277,4 @@ growth-cli/                     The tool (open source)
 
 ## License
 
-BSL-1.1 (Business Source License)
-
-Free to use, modify, and fork for your own marketing. Cannot be used to offer a competing managed service. Converts to open source after 4 years.
+Apache 2.0 — Free to use, modify, distribute. See [LICENSE](./LICENSE).

@@ -7,7 +7,7 @@ name = "growth-cli"
 version = "0.1.0"
 description = "Terminal-native marketing automation. Claude Code for marketers."
 readme = "README.md"
-license = {text = "BSL-1.1"}
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
     {name = "Serena Key", email = "serena@unispark.dev"},
