@@ -3,6 +3,8 @@ description: |
   Scrape Reddit for hot posts → filter by keywords → summarize to 280 chars →
   post as tweets. Cross-platform content recycling with atomic modules.
 version: "2.0"
+# execution_mode: module-dag (direct API calls, no LLM, fast + free)
+# cost: $0.00 | speed: 30 seconds | rate_limit_risk: low
 
 identities:
   twitter_account: { platform: twitter }

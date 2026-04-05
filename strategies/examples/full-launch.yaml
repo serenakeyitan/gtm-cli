@@ -5,6 +5,8 @@ description: |
   2. Reddit → Twitter recycling (sub-strategy)
   Both run, then results merge. Strategy-as-module demo.
 version: "2.0"
+# execution_mode: module-dag (direct API calls, no LLM, fast + free)
+# cost: $0.00 | speed: 30 seconds | rate_limit_risk: low
 
 params:
   min_points: { default: 400 }

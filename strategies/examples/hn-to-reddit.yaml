@@ -3,6 +3,8 @@ description: |
   Scrape HN front page → filter hot stories → adapt for Reddit tone → post to subreddit.
   Fully composable from atomic modules. No agents needed.
 version: "2.0"
+# execution_mode: module-dag (direct API calls, no LLM, fast + free)
+# cost: $0.00 | speed: 30 seconds | rate_limit_risk: low
 
 identities:
   reddit_account: { platform: reddit }

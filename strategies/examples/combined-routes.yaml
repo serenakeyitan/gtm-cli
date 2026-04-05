@@ -6,6 +6,8 @@ description: |
   Both routes share the same Twitter scout (run once), then branch in parallel.
   Uses only atomic tool modules — no LLM agents needed.
 version: "2.0"
+# execution_mode: module-dag (direct API calls, no LLM, fast + free)
+# cost: $0.00 | speed: 30 seconds | rate_limit_risk: low
 
 identities:
   twitter_account: { platform: twitter }

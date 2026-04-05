@@ -7,6 +7,9 @@ description: |
   Old Route 2: ~175 Claude API calls, 15-30 min, ~$1.00
   This version: ~1 Claude API call, 30 seconds, ~$0.01
 version: "2.0"
+# execution_mode: hybrid (direct API + 1 LLM call for synthesis)
+# cost: ~$0.01 | speed: 30-60 seconds | rate_limit_risk: low
+# fallback: if LLM fails, sorts by engagement (deterministic)
 
 identities:
   twitter_account: { platform: twitter }

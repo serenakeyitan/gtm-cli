@@ -1,6 +1,8 @@
 name: "Cross-Platform Scout (Parallel)"
 description: "Search Twitter + Reddit + HN in parallel, merge results, filter top items"
 version: "2.0"
+# execution_mode: module-dag (direct API calls, no LLM, fast + free)
+# cost: $0.00 | speed: 30 seconds | rate_limit_risk: low
 
 identities:
   twitter_account: { platform: twitter }

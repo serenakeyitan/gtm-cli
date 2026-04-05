@@ -1,6 +1,8 @@
 name: "HN Scout & Filter"
 description: "Fetch HN front page, filter by engagement, adapt titles — module DAG demo"
 version: "2.0"
+# execution_mode: module-dag (direct API calls, no LLM, fast + free)
+# cost: $0.00 | speed: 30 seconds | rate_limit_risk: low
 
 params:
   min_points: { default: 300 }
