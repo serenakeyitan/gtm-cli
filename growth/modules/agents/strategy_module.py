@@ -56,28 +56,29 @@ class StrategyModule(Module):
 
     MAX_DEPTH = 5
 
+    # Per-asyncio-task ancestry tracking using contextvars
+    # This is safe for parallel execution — each task gets its own copy
+    import contextvars
+    _ancestry_var: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
+        "strategy_ancestry", default=frozenset()
+    )
+
     async def run(self, input_data, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
         """Execute the sub-strategy and return its results as a ModuleResult."""
-        # Per-call-stack cycle/depth guard using context
-        # Each call chain carries its own ancestry set — safe for parallel execution
-        ancestry = getattr(context, '_strategy_ancestry', set())
+        # Per-task cycle/depth guard via contextvars (survives across DAG runner boundary)
+        ancestry = self._ancestry_var.get()
 
         if self.name in ancestry:
-            return ModuleResult(success=False, errors=[f"Cycle detected: {self.name} is already in the call chain: {ancestry}"])
+            return ModuleResult(success=False, errors=[f"Cycle detected: {self.name} already in chain: {ancestry}"])
         if len(ancestry) >= self.MAX_DEPTH:
             return ModuleResult(success=False, errors=[f"Max nesting depth ({self.MAX_DEPTH}) exceeded: {ancestry}"])
 
-        # Pass ancestry down to sub-strategies via context
-        child_context = ModuleContext(
-            identity_dir=context.identity_dir,
-            identity_name=context.identity_name,
-            rate_limiter=context.rate_limiter,
-            config=context.config,
-            dry_run=context.dry_run,
-        )
-        child_context._strategy_ancestry = ancestry | {self.name}
-
-        return await self._execute(params, child_context)
+        # Set ancestry for this task — sub-strategies see it automatically
+        token = self._ancestry_var.set(ancestry | {self.name})
+        try:
+            return await self._execute(params, context)
+        finally:
+            self._ancestry_var.reset(token)
 
     async def _execute(self, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
         from growth.engine.dag_runner import run_dag_strategy
