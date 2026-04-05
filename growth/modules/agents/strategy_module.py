@@ -54,8 +54,25 @@ class StrategyModule(Module):
         }
         self._raw = data
 
+    # Track recursion to prevent infinite loops
+    _active_strategies: set[str] = set()
+    MAX_DEPTH = 5
+
     async def run(self, input_data, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
         """Execute the sub-strategy and return its results as a ModuleResult."""
+        # Cycle/depth guard
+        if self.name in StrategyModule._active_strategies:
+            return ModuleResult(success=False, errors=[f"Cycle detected: {self.name} is already running"])
+        if len(StrategyModule._active_strategies) >= self.MAX_DEPTH:
+            return ModuleResult(success=False, errors=[f"Max nesting depth ({self.MAX_DEPTH}) exceeded"])
+
+        StrategyModule._active_strategies.add(self.name)
+        try:
+            return await self._execute(params, context)
+        finally:
+            StrategyModule._active_strategies.discard(self.name)
+
+    async def _execute(self, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
         from growth.engine.dag_runner import run_dag_strategy
         from growth.engine.strategy_loader import Strategy
 
@@ -67,13 +84,18 @@ class StrategyModule(Module):
             from growth.engine.runner import run_strategy
             state = await run_strategy(strategy, params, dry_run=context.dry_run)
 
-        # Collect all output data from sub-strategy modules/steps
+        # Collect output from sub-strategy — DAG stores in 'modules', legacy in 'steps'
         all_data = []
         modules_state = state.get("modules") or state.get("steps") or {}
         for mod_name, mod_state in modules_state.items():
+            # DAG runner stores count/metadata but not raw data in state
+            # Legacy runner stores result dicts
             result = mod_state.get("result", {})
-            if isinstance(result, dict) and "results" in result:
-                all_data.extend(result["results"])
+            if isinstance(result, dict):
+                if "results" in result:
+                    all_data.extend(result["results"])
+                elif result.get("success"):
+                    all_data.append(result)
 
         success = state.get("status", "").startswith("completed")
         errors = state.get("errors", [])

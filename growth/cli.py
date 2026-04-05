@@ -512,16 +512,30 @@ def modules_create(name, description):
     strategies_dir = Path("~/.config/growth/strategies").expanduser()
     strategies_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{name}.yaml"
+    # Sanitize name — prevent path traversal
+    import re
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '-', name)
+    if safe_name != name:
+        console.print(f"[yellow]Sanitized name: {name} → {safe_name}[/yellow]")
+
+    filename = f"{safe_name}.yaml"
     filepath = strategies_dir / filename
+
+    # Verify filepath stays within strategies dir
+    if not filepath.resolve().is_relative_to(strategies_dir.resolve()):
+        console.print("[red]Invalid strategy name.[/red]")
+        return
 
     if filepath.exists():
         console.print(f"[yellow]Strategy already exists: {filepath}[/yellow]")
         if not click.confirm("Overwrite?"):
             return
 
-    template = f"""name: "{name}"
-description: "{description or 'My custom strategy'}"
+    # Escape YAML special chars in user input
+    safe_desc = (description or "My custom strategy").replace('"', '\\"').replace('\n', ' ')
+
+    template = f"""name: "{safe_name}"
+description: "{safe_desc}"
 version: "2.0"
 
 # Identities this strategy needs (optional)
@@ -566,9 +580,13 @@ modules:
   #   params:
   #     subreddit: "SaaS"
 """
-    filepath.write_text(template)
+    try:
+        filepath.write_text(template)
+    except OSError as e:
+        console.print(f"[red]Failed to write strategy: {e}[/red]")
+        return
     console.print(f"\n  [green]✅ Strategy created: {filepath}[/green]")
-    console.print(f"  Edit it, then run: [bold]growth run {name}[/bold]")
+    console.print(f"  Edit it, then run: [bold]growth run {safe_name}[/bold]")
     console.print(f"\n  Available modules: [bold]growth modules list[/bold]")
 
 
