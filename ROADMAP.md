@@ -18,7 +18,7 @@
 | ------------ | ------ | ---------------------------------------------------------- | ----- |
 | v0.1         | ✅ Done | CLI, 3 platforms, auth, rate limiter, strategies, traction | 21/21 |
 | v0.2 Phase 1 | ✅ Done | Module system foundation (15 modules)                      | 8/8   |
-| v0.2 Phase 2 | ⬜ Next | Transform modules                                          | 0/4   |
+| v0.2 Phase 2 | ✅ Done | Transform modules                                          | 4/4   |
 | v0.2 Phase 3 | ⬜      | DAG runner                                                 | 0/7   |
 | v0.2 Phase 4 | ⬜      | Strategy-as-module                                         | 0/3   |
 | v0.2 Phase 5 | ⬜      | Multi-account                                              | 0/7   |
@@ -76,14 +76,14 @@
 - `growth modules list` CLI command — `4dfbfd7`
 - `growth modules info <name>` CLI command — `4dfbfd7`
 
-### Phase 2: Transforms ⬜ NEXT
+### Phase 2: Transforms ✅ DONE
 
-- `transform/rewrite` — LLM rewrite for platform tone (uses style_guide.md)
-- `transform/extract_url` — find original source URL from tweets
-- `transform/platform_adapt` — format content for platform requirements
-- `transform/summarize` — condense for character limits
+- [x] `transform/rewrite` — LLM rewrite for platform tone (uses style_guide.md) — `4d07bee`
+- [x] `transform/extract_url` — find original source URL from tweets — `4d07bee`
+- [x] `transform/platform_adapt` — format content for platform requirements — `4d07bee`
+- [x] `transform/summarize` — condense for character limits — `4d07bee`
 
-### Phase 3: DAG Runner ⬜
+### Phase 3: DAG Runner ⬜ NEXT
 
 - Parse module DAG from YAML (infer execution order from `input` field)
 - Topological sort for execution order
@@ -180,14 +180,14 @@
 
 | Metric               | Value                                                      |
 | -------------------- | ---------------------------------------------------------- |
-| Commits              | 25                                                         |
-| Lines of Python      | ~9,000                                                     |
-| Composable modules   | 15                                                         |
+| Commits              | 27                                                         |
+| Lines of Python      | ~10,000                                                     |
+| Composable modules   | 19                                                         |
 | Platforms            | 3 (Twitter, Reddit, HN)                                    |
 | Agents               | 6 (scout, novelty, builder, tester, promoter, hn_promoter) |
 | Strategies           | 5 (3 examples + 2 local routes)                            |
 | Prompts              | 7 (6 agent prompts + 1 style guide)                        |
-| Codex reviews        | 18 commits reviewed                                        |
-| Codex findings fixed | 19 total                                                   |
+| Codex reviews        | 27 commits reviewed                                        |
+| Codex findings fixed | 23 total                                                   |
 
 
