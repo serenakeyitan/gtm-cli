@@ -503,6 +503,75 @@ def modules_list(category, json_output):
     console.print(f"\n  [dim]{len(mods)} modules total[/dim]")
 
 
+@modules.command("create")
+@click.argument("name")
+@click.option("--description", "-d", default="", help="Module description")
+def modules_create(name, description):
+    """Scaffold a new strategy YAML file."""
+    from growth.config import GrowthConfig
+    strategies_dir = Path("~/.config/growth/strategies").expanduser()
+    strategies_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{name}.yaml"
+    filepath = strategies_dir / filename
+
+    if filepath.exists():
+        console.print(f"[yellow]Strategy already exists: {filepath}[/yellow]")
+        if not click.confirm("Overwrite?"):
+            return
+
+    template = f"""name: "{name}"
+description: "{description or 'My custom strategy'}"
+version: "2.0"
+
+# Identities this strategy needs (optional)
+# identities:
+#   twitter_account: {{ platform: twitter }}
+#   reddit_account: {{ platform: reddit }}
+
+# Parameters (user provides at runtime with -p key=value)
+params:
+  query: {{ required: true }}
+  count: {{ default: 10 }}
+
+# Module DAG — execution order inferred from 'input' dependencies
+modules:
+  # Step 1: Source — gather data
+  search:
+    use: twitter/search
+    # as: $twitter_account
+    params:
+      query: "{{{{ query }}}}"
+      count: "{{{{ count }}}}"
+
+  # Step 2: Filter — process data
+  filtered:
+    use: filter/engagement
+    input: search
+    params:
+      min_likes: 100
+
+  # Step 3: Transform — adapt content
+  adapted:
+    use: transform/platform_adapt
+    input: filtered
+    params:
+      platform: reddit
+
+  # Step 4: Action — post (uncomment when ready)
+  # post:
+  #   use: reddit/submit
+  #   input: adapted
+  #   as: $reddit_account
+  #   params:
+  #     subreddit: "SaaS"
+"""
+    filepath.write_text(template)
+    console.print(f"\n  [green]✅ Strategy created: {filepath}[/green]")
+    console.print(f"  Edit it, then run: [bold]growth run {name}[/bold]")
+    console.print(f"\n  Available modules: [bold]growth modules list[/bold]")
+
+
 @modules.command("info")
 @click.argument("name")
 def modules_info(name):

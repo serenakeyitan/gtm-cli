@@ -1,0 +1,33 @@
+name: "Full Launch Campaign"
+description: |
+  Compose multiple strategies into one launch:
+  1. HN Scout & Filter (sub-strategy)
+  2. Reddit → Twitter recycling (sub-strategy)
+  Both run, then results merge. Strategy-as-module demo.
+version: "2.0"
+
+params:
+  min_points: { default: 400 }
+
+modules:
+  # Sub-strategy 1: HN scout and filter
+  hn_intel:
+    use: strategy/hn-scout-and-filter
+    params:
+      min_points: "{{ min_points }}"
+      count: 5
+
+  # Sub-strategy 2: Reddit scout
+  reddit_intel:
+    use: strategy/reddit-to-twitter
+    params:
+      subreddit: SaaS
+      min_score: 200
+
+  # Both run in PARALLEL (no mutual dependency)
+  # Then merge results
+  combined:
+    use: filter/limit
+    input: [hn_intel, reddit_intel]
+    params:
+      count: 5

@@ -82,6 +82,13 @@ def _ensure_loaded() -> None:
     _safe_import("growth.modules.control")
     _safe_import("growth.modules.agents")
 
+    # Register strategy files as 'strategy/*' modules
+    try:
+        from growth.modules.agents.strategy_module import register_strategy_modules
+        register_strategy_modules()
+    except Exception as e:
+        log.debug("Could not register strategy modules: %s", e)
+
 
 def _safe_import(module_path: str) -> None:
     """Import a module, ignoring errors (optional dependencies)."""

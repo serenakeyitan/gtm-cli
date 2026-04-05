@@ -148,12 +148,22 @@ async def _run_module(
     input_ref = mod_def.get("input")
     identity_ref = mod_def.get("as", "")
 
-    # Resolve module
+    # Resolve module (strategy/* modules are auto-registered from YAML files)
     try:
         module = registry.get(use)
-    except KeyError as e:
-        state["modules"][name] = {"status": "failed", "error": str(e)}
-        return ModuleResult(success=False, errors=[str(e)])
+    except KeyError:
+        # If not found and starts with strategy/, try loading explicitly
+        if use.startswith("strategy/"):
+            try:
+                from growth.modules.agents.strategy_module import register_strategy_modules
+                register_strategy_modules()
+                module = registry.get(use)
+            except KeyError as e2:
+                state["modules"][name] = {"status": "failed", "error": str(e2)}
+                return ModuleResult(success=False, errors=[str(e2)])
+        else:
+            state["modules"][name] = {"status": "failed", "error": f"Module not found: '{use}'"}
+            return ModuleResult(success=False, errors=[f"Module not found: '{use}'"])
 
     # Resolve input data from upstream module(s)
     input_data = None
