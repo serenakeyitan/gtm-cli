@@ -20,6 +20,48 @@ def load_prompt(name: str) -> str:
     return path.read_text()
 
 
+def load_style_guide(platform: str | None = None) -> str:
+    """Load the content style guide, optionally filtered to a platform section.
+    
+    Platform: 'reddit', 'hn', 'twitter', or None for the full guide.
+    """
+    path = PROMPTS_DIR / "style_guide.md"
+    if not path.exists():
+        return ""
+    
+    full_guide = path.read_text()
+    
+    if not platform:
+        return full_guide
+    
+    # Extract the platform-specific section
+    platform_headers = {
+        "reddit": "### Reddit",
+        "hn": "### Hacker News",
+        "twitter": "### Twitter",
+    }
+    
+    header = platform_headers.get(platform.lower())
+    if not header:
+        return full_guide
+    
+    start = full_guide.find(header)
+    if start == -1:
+        return full_guide
+    
+    # Find the next ### header or --- separator
+    next_section = full_guide.find("\n### ", start + len(header))
+    next_separator = full_guide.find("\n---", start + len(header))
+    
+    end = len(full_guide)
+    if next_section != -1:
+        end = min(end, next_section)
+    if next_separator != -1:
+        end = min(end, next_separator)
+    
+    return full_guide[start:end].strip()
+
+
 def validate_ideas_output(data: Any) -> list[dict[str, Any]]:
     """Validate that output is a list of idea dicts with required fields."""
     if isinstance(data, str):
