@@ -1,0 +1,55 @@
+name: "HN → Reddit Crosspost"
+description: |
+  Scrape HN front page → filter hot stories → adapt for Reddit tone → post to subreddit.
+  Fully composable from atomic modules. No agents needed.
+version: "2.0"
+
+identities:
+  reddit_account: { platform: reddit }
+
+params:
+  min_points: { default: 300 }
+  subreddit: { default: "SaaS" }
+  count: { default: 10 }
+
+modules:
+  # 1. Scrape: get HN front page
+  scrape_hn:
+    use: hn/top_stories
+    params:
+      count: "{{ count }}"
+
+  # 2. Filter: keep only high-engagement stories
+  hot_stories:
+    use: filter/engagement
+    input: scrape_hn
+    params:
+      min_score: "{{ min_points }}"
+
+  # 3. Deduplicate: skip stories we already posted
+  fresh:
+    use: filter/deduplicate
+    input: hot_stories
+
+  # 4. Limit: take top 3
+  top3:
+    use: filter/limit
+    input: fresh
+    params:
+      count: 3
+      sort_by: points
+
+  # 5. Transform: adapt titles and format for Reddit
+  reddit_ready:
+    use: transform/platform_adapt
+    input: top3
+    params:
+      platform: reddit
+
+  # FUTURE: uncomment to actually post
+  # post:
+  #   use: reddit/submit
+  #   input: reddit_ready
+  #   as: $reddit_account
+  #   params:
+  #     subreddit: "{{ subreddit }}"

@@ -80,6 +80,7 @@ def _ensure_loaded() -> None:
     _safe_import("growth.modules.actions")
     _safe_import("growth.modules.monitors")
     _safe_import("growth.modules.control")
+    _safe_import("growth.modules.agents")
 
 
 def _safe_import(module_path: str) -> None:

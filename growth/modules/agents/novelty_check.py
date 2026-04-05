@@ -1,0 +1,49 @@
+"""agent/novelty_check — LLM-powered GitHub novelty filter.
+
+Input: list of idea dicts (from scout)
+Output: filtered list — only ideas that don't already exist on GitHub
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from growth.modules.base import Module, ModuleResult, ModuleContext
+from growth.modules.registry import register
+
+log = logging.getLogger(__name__)
+
+
+class NoveltyCheckAgentModule(Module):
+    name = "agent/novelty_check"
+    category = "agent"
+    description = "LLM-powered novelty filter — check GitHub for existing implementations"
+    requires_auth = False
+    param_schema = {}
+
+    async def run(self, input_data, params: dict[str, Any], context: ModuleContext) -> ModuleResult:
+        if not input_data or not input_data.data:
+            return ModuleResult(success=True, data=[])
+
+        if context.dry_run:
+            return ModuleResult(success=True, data=input_data.data,
+                                metadata={"note": "Would check GitHub for existing projects"})
+
+        try:
+            from growth.agents.novelty_checker import run_novelty_checker
+            from growth.engine.state import RunState
+
+            state = RunState.create("growth-cli-novelty")
+            result = await run_novelty_checker(state, input_data.data)
+            novel = result if isinstance(result, list) else [result]
+
+            return ModuleResult(success=True, data=novel,
+                                metadata={"input": len(input_data.data), "novel": len(novel)})
+        except ImportError:
+            return ModuleResult(success=False, errors=["claude-code-sdk not installed"])
+        except Exception as e:
+            return ModuleResult(success=False, errors=[str(e)])
+
+
+register(NoveltyCheckAgentModule())

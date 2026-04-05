@@ -1,0 +1,56 @@
+name: "Reddit → Twitter Thread"
+description: |
+  Scrape Reddit for hot posts → filter by keywords → summarize to 280 chars →
+  post as tweets. Cross-platform content recycling with atomic modules.
+version: "2.0"
+
+identities:
+  twitter_account: { platform: twitter }
+
+params:
+  subreddit: { required: true }
+  keywords: { default: "AI,startup,launch" }
+  min_score: { default: 100 }
+
+modules:
+  # 1. Scrape Reddit
+  scrape:
+    use: reddit/search
+    params:
+      query: "{{ keywords }}"
+      subreddit: "{{ subreddit }}"
+      count: 20
+
+  # 2. Filter: high score
+  hot:
+    use: filter/engagement
+    input: scrape
+    params:
+      min_score: "{{ min_score }}"
+
+  # 3. Filter: deduplicate
+  fresh:
+    use: filter/deduplicate
+    input: hot
+
+  # 4. Limit: top 5
+  top5:
+    use: filter/limit
+    input: fresh
+    params:
+      count: 5
+      sort_by: score
+
+  # 5. Summarize: fit into 280 chars for Twitter
+  tweet_sized:
+    use: transform/summarize
+    input: top5
+    params:
+      max_length: 250
+      field: title
+
+  # 6. Post to Twitter (uncomment when ready)
+  # post:
+  #   use: twitter/post
+  #   input: tweet_sized
+  #   as: $twitter_account

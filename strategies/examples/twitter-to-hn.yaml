@@ -1,0 +1,70 @@
+name: "Twitter → HN Pipeline"
+description: |
+  Scrape Twitter for viral content → extract original URLs → deduplicate against HN →
+  clean titles per HN guidelines → submit to Hacker News.
+  Every step is a small composable module.
+version: "2.0"
+
+identities:
+  twitter_account: { platform: twitter }
+  hn_account: { platform: hn }
+
+params:
+  query: { required: true }
+  min_likes: { default: 500 }
+
+modules:
+  # 1. Scrape Twitter
+  scrape:
+    use: twitter/search
+    as: $twitter_account
+    params:
+      query: "{{ query }}"
+      count: 20
+
+  # 2. Filter: high engagement only
+  viral:
+    use: filter/engagement
+    input: scrape
+    params:
+      min_likes: "{{ min_likes }}"
+
+  # 3. Extract: find original source URLs (not tweet URLs)
+  sources:
+    use: transform/extract_url
+    input: viral
+
+  # 4. Filter: only items that have a source URL
+  has_url:
+    use: control/condition
+    input: sources
+    params:
+      field: source_url
+      operator: ne
+      value: ""
+
+  # 5. Deduplicate: skip if already on HN
+  fresh:
+    use: filter/deduplicate
+    input: has_url
+
+  # 6. Limit: top 3 candidates
+  top3:
+    use: filter/limit
+    input: fresh
+    params:
+      count: 3
+      sort_by: favorite_count
+
+  # 7. Adapt: clean titles per HN guidelines
+  hn_ready:
+    use: transform/platform_adapt
+    input: top3
+    params:
+      platform: hn
+
+  # 8. Submit to HN (uncomment when ready)
+  # submit:
+  #   use: hn/submit_link
+  #   input: hn_ready
+  #   as: $hn_account
