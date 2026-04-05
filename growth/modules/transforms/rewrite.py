@@ -73,8 +73,11 @@ class RewriteModule(Module):
             )
 
             try:
+                from claude_code_sdk import ClaudeCodeOptions
+                options = ClaudeCodeOptions(model="claude-sonnet-4-20250514", max_turns=1)
+
                 rewritten_text = ""
-                async for message in query(prompt=prompt, model="claude-sonnet-4-20250514", max_turns=1):
+                async for message in query(prompt=prompt, options=options):
                     rewritten_text = _extract_text(message)
                     if rewritten_text:
                         break

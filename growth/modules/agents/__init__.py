@@ -16,6 +16,7 @@ for _mod in [
     "growth.modules.agents.test",
     "growth.modules.agents.promote_reddit",
     "growth.modules.agents.promote_hn",
+    "growth.modules.agents.synthesize",
 ]:
     try:
         __import__(_mod)

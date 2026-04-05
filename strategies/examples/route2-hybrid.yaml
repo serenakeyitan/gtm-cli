@@ -1,0 +1,90 @@
+name: "HN Submit — Hybrid (Module + LLM)"
+description: |
+  Same goal as Route 2, but 95% faster and cheaper:
+  - Deterministic modules: scrape Twitter, filter, extract URLs
+  - LLM ONLY for: "which of these should we submit to HN?" (1 API call)
+  
+  Old Route 2: ~175 Claude API calls, 15-30 min, ~$1.00
+  This version: ~1 Claude API call, 30 seconds, ~$0.01
+version: "2.0"
+
+identities:
+  twitter_account: { platform: twitter }
+
+params:
+  accounts: { default: "karpathy,AndrewYNg,ylaboratory,OpenAI" }
+  min_likes: { default: 1000 }
+  top_n: { default: 3 }
+
+modules:
+  # ═══ DETERMINISTIC: Scrape + Filter (0 LLM calls) ═══
+
+  # Scrape multiple accounts via for_each
+  scout_karpathy:
+    use: twitter/user_tweets
+    as: $twitter_account
+    params: { username: "karpathy", count: 15 }
+
+  scout_andrew:
+    use: twitter/user_tweets
+    as: $twitter_account
+    params: { username: "AndrewYNg", count: 15 }
+
+  scout_ylab:
+    use: twitter/user_tweets
+    as: $twitter_account
+    params: { username: "ylaboratory", count: 15 }
+
+  scout_openai:
+    use: twitter/user_tweets
+    as: $twitter_account
+    params: { username: "OpenAI", count: 15 }
+
+  # All 4 run in PARALLEL (no mutual dependencies)
+
+  # Merge all tweets
+  all_tweets:
+    use: filter/limit
+    input: [scout_karpathy, scout_andrew, scout_ylab, scout_openai]
+    params: { count: 200 }
+
+  # Filter by engagement
+  viral:
+    use: filter/engagement
+    input: all_tweets
+    params:
+      min_likes: "{{ min_likes }}"
+
+  # Extract original source URLs
+  with_urls:
+    use: transform/extract_url
+    input: viral
+
+  # Keep only items with real URLs
+  has_url:
+    use: control/condition
+    input: with_urls
+    params:
+      field: source_url
+      operator: ne
+      value: ""
+
+  # Clean titles for HN
+  hn_ready:
+    use: transform/platform_adapt
+    input: has_url
+    params:
+      platform: hn
+
+  # ═══ LLM: Just the thinking part (1 API call) ═══
+
+  best_picks:
+    use: agent/synthesize
+    input: hn_ready
+    params:
+      task: |
+        You are selecting content to submit to Hacker News.
+        Pick the items most likely to get upvotes on HN.
+        Prefer: deep technical content, original research, open source launches.
+        Avoid: marketing fluff, listicles, duplicates of recent HN posts.
+      output_count: "{{ top_n }}"
