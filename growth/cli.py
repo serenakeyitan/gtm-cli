@@ -364,10 +364,16 @@ def run_strategy_cmd(strategy_name, list_strategies, dry_run, param, json_output
             from growth.engine.runner import run_strategy
             state = asyncio.run(run_strategy(strategy, user_params, dry_run=dry_run))
     except ValueError as e:
-        console.print(f"\n  [red]❌ Strategy error: {e}[/red]")
+        if json_output:
+            click.echo(json.dumps({"error": str(e), "status": "failed"}))
+        else:
+            console.print(f"\n  [red]❌ Strategy error: {e}[/red]")
         sys.exit(1)
     except Exception as e:
-        console.print(f"\n  [red]❌ Run failed: {e}[/red]")
+        if json_output:
+            click.echo(json.dumps({"error": str(e), "status": "failed"}))
+        else:
+            console.print(f"\n  [red]❌ Run failed: {e}[/red]")
         sys.exit(1)
 
     if json_output:
