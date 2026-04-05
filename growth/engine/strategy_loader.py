@@ -44,6 +44,12 @@ class Strategy:
     params: dict[str, dict[str, Any]] = field(default_factory=dict)
     steps: list[StrategyStep] = field(default_factory=list)
     source_path: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_dag(self) -> bool:
+        """True if this strategy uses the v0.2 module DAG format."""
+        return len(self.steps) == 0 and bool(self.raw.get("modules"))
 
     @classmethod
     def load(cls, path: Path) -> Strategy:
@@ -68,7 +74,7 @@ class Strategy:
                 when=step_data.get("when", ""),
             ))
 
-        return cls(
+        strategy = cls(
             name=data.get("name", path.stem),
             description=data.get("description", ""),
             version=data.get("version", "1.0"),
@@ -78,6 +84,8 @@ class Strategy:
             steps=steps,
             source_path=str(path),
         )
+        strategy.raw = data  # Keep raw for DAG detection
+        return strategy
 
 
 def find_strategies() -> list[Path]:

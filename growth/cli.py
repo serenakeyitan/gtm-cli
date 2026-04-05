@@ -354,28 +354,42 @@ def run_strategy_cmd(strategy_name, list_strategies, dry_run, param, json_output
         console.print("  [dim](dry run — nothing will be executed)[/dim]")
     console.print()
 
-    from growth.engine.runner import run_strategy
-    state = asyncio.run(run_strategy(strategy, user_params, dry_run=dry_run))
+    # Use DAG runner for v0.2 module-based strategies, legacy runner for v0.1 step-based
+    if strategy.is_dag:
+        from growth.engine.dag_runner import run_dag_strategy
+        state = asyncio.run(run_dag_strategy(strategy.raw, user_params, dry_run=dry_run))
+    else:
+        from growth.engine.runner import run_strategy
+        state = asyncio.run(run_strategy(strategy, user_params, dry_run=dry_run))
 
     if json_output:
         click.echo(json.dumps(state, indent=2, default=str))
     else:
-        # Print results
-        for step_id, step_state in state.get("steps", {}).items():
+        # Print results — handle both legacy 'steps' and DAG 'modules' format
+        items_dict = state.get("modules") or state.get("steps") or {}
+        for step_id, step_state in items_dict.items():
             status = step_state.get("status", "?")
             icon = {"success": "✅", "dry_run": "👁", "skipped": "⏭", "failed": "❌"}.get(status, "?")
-            console.print(f"  {icon} [bold]{step_id}[/bold]: {status}")
+            count = step_state.get("count", "")
+            count_str = f" ({count} items)" if count else ""
+            use = step_state.get("use", "")
+            use_str = f" [dim]{use}[/dim]" if use else ""
 
+            console.print(f"  {icon} [bold]{step_id}[/bold]{use_str}{count_str}: {status}")
+
+            # Show result data for legacy format
             result = step_state.get("result", {})
             if "results" in result:
-                items = result["results"][:5]
-                for item in items:
+                for item in result["results"][:5]:
                     title = item.get("title", item.get("text", ""))[:80]
                     score = item.get("score", 0)
                     console.print(f"      [{score}] {title}")
 
             if step_state.get("error"):
                 console.print(f"      [red]{step_state['error']}[/red]")
+            if step_state.get("errors"):
+                for err in step_state["errors"][:3]:
+                    console.print(f"      [dim red]{err}[/dim red]")
 
         console.print(f"\n  Status: [bold]{state['status']}[/bold]")
         if state.get("errors"):

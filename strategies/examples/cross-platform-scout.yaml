@@ -1,0 +1,39 @@
+name: "Cross-Platform Scout (Parallel)"
+description: "Search Twitter + Reddit + HN in parallel, merge results, filter top items"
+version: "2.0"
+
+identities:
+  twitter_account: { platform: twitter }
+
+params:
+  query: { required: true }
+  count: { default: 5 }
+
+# These 3 sources run in PARALLEL (no mutual dependencies)
+modules:
+  twitter:
+    use: twitter/search
+    as: $twitter_account
+    params:
+      query: "{{ query }}"
+      count: "{{ count }}"
+
+  reddit:
+    use: reddit/search
+    params:
+      query: "{{ query }}"
+      count: "{{ count }}"
+
+  hn:
+    use: hn/search
+    params:
+      query: "{{ query }}"
+      count: "{{ count }}"
+
+  # This waits for ALL 3 sources, then filters
+  merged_filter:
+    use: filter/limit
+    input: [twitter, reddit, hn]
+    params:
+      count: 10
+      sort_by: points

@@ -1,0 +1,33 @@
+name: "HN Scout & Filter"
+description: "Fetch HN front page, filter by engagement, adapt titles — module DAG demo"
+version: "2.0"
+
+params:
+  min_points: { default: 300 }
+  count: { default: 10 }
+
+# v0.2 module DAG format — execution order inferred from 'input'
+modules:
+  fetch:
+    use: hn/top_stories
+    params:
+      count: "{{ count }}"
+
+  hot:
+    use: filter/engagement
+    input: fetch
+    params:
+      min_score: "{{ min_points }}"
+
+  clean:
+    use: transform/platform_adapt
+    input: hot
+    params:
+      platform: hn
+
+  top3:
+    use: filter/limit
+    input: clean
+    params:
+      count: 3
+      sort_by: points
