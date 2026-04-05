@@ -355,12 +355,19 @@ def run_strategy_cmd(strategy_name, list_strategies, dry_run, param, json_output
     console.print()
 
     # Use DAG runner for v0.2 module-based strategies, legacy runner for v0.1 step-based
-    if strategy.is_dag:
-        from growth.engine.dag_runner import run_dag_strategy
-        state = asyncio.run(run_dag_strategy(strategy.raw, user_params, dry_run=dry_run))
-    else:
-        from growth.engine.runner import run_strategy
-        state = asyncio.run(run_strategy(strategy, user_params, dry_run=dry_run))
+    try:
+        if strategy.is_dag:
+            from growth.engine.dag_runner import run_dag_strategy
+            state = asyncio.run(run_dag_strategy(strategy.raw, user_params, dry_run=dry_run))
+        else:
+            from growth.engine.runner import run_strategy
+            state = asyncio.run(run_strategy(strategy, user_params, dry_run=dry_run))
+    except ValueError as e:
+        console.print(f"\n  [red]❌ Strategy error: {e}[/red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"\n  [red]❌ Run failed: {e}[/red]")
+        sys.exit(1)
 
     if json_output:
         click.echo(json.dumps(state, indent=2, default=str))

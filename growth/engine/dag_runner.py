@@ -62,8 +62,9 @@ async def run_dag_strategy(
     # Resolve params
     resolved_params = _resolve_params(param_defs, user_params)
 
-    # Build the DAG
+    # Build the DAG — validate references
     dag = _build_dag(modules_def)
+    _validate_dag_refs(modules_def, dag)
 
     # Topological sort
     execution_order = _topological_sort(dag)
@@ -86,6 +87,15 @@ async def run_dag_strategy(
     for batch in _parallel_batches(execution_order, dag):
         tasks = []
         for module_name in batch:
+            # Skip if any upstream dependency failed
+            deps = dag.get(module_name, [])
+            failed_deps = [d for d in deps if d in results and not results[d].success]
+            if failed_deps:
+                log.warning("Module [%s]: skipping — upstream %s failed", module_name, failed_deps)
+                state["modules"][module_name] = {"status": "skipped", "reason": f"upstream failed: {failed_deps}"}
+                results[module_name] = ModuleResult(success=False, errors=[f"upstream {failed_deps} failed"])
+                continue
+
             mod_def = modules_def[module_name]
             tasks.append(_run_module(
                 module_name, mod_def, results, resolved_params,
@@ -101,6 +111,10 @@ async def run_dag_strategy(
                 state["modules"][module_name] = {"status": "failed", "error": str(result)}
                 state["errors"].append(f"{module_name}: {result}")
                 results[module_name] = ModuleResult(success=False, errors=[str(result)])
+            elif not result.success:
+                # Module returned failure without exception
+                state["errors"].append(f"{module_name}: {'; '.join(result.errors)}")
+                results[module_name] = result
             else:
                 results[module_name] = result
 
@@ -191,11 +205,12 @@ async def _run_module(
             identity = mgr.get_for_platform(module.platform)
             context.identity_dir = identity.identity_dir
             context.identity_name = identity.name
-        except ValueError:
-            pass
+        except ValueError as e:
+            state["modules"][name] = {"status": "failed", "error": f"Auth required: {e}"}
+            return ModuleResult(success=False, errors=[f"Auth required: {e}"])
 
     # Execute
-    log.debug("Module [%s] params after resolve: %s", name, params)
+    log.debug("Module [%s] params keys: %s", name, list(params.keys()))  # Don't log values (may contain secrets)
     log.info("Module [%s] (%s): running%s", name, use, " (dry-run)" if dry_run else "")
     result = await module.run(input_data, params, context)
 
@@ -273,6 +288,21 @@ def _topological_sort(dag: dict[str, list[str]]) -> list[str]:
         raise ValueError(f"Cycle detected in module DAG: {missing}")
 
     return order
+
+
+def _validate_dag_refs(modules_def: dict, dag: dict) -> None:
+    """Validate that all input references point to existing modules."""
+    for name, defn in modules_def.items():
+        input_ref = defn.get("input")
+        if input_ref is None:
+            continue
+        refs = input_ref if isinstance(input_ref, list) else [input_ref]
+        for ref in refs:
+            if ref not in modules_def:
+                raise ValueError(
+                    f"Module '{name}' references unknown input '{ref}'. "
+                    f"Available: {list(modules_def.keys())}"
+                )
 
 
 def _parallel_batches(order: list[str], dag: dict[str, list[str]]) -> list[list[str]]:
