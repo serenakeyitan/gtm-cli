@@ -33,9 +33,13 @@ class NoveltyCheckAgentModule(Module):
         try:
             from growth.agents.novelty_checker import run_novelty_checker
             from growth.engine.state import RunState
+            from growth.engine.runner import _build_agent_config
+            from growth.config import IDENTITIES_DIR
 
+            config = _build_agent_config(IDENTITIES_DIR)
             state = RunState.create("growth-cli-novelty")
-            result = await run_novelty_checker(state, input_data.data)
+            # Legacy agent expects {"ideas": [...], "config": config}
+            result = await run_novelty_checker(state, {"ideas": input_data.data, "config": config})
             novel = result if isinstance(result, list) else [result]
 
             return ModuleResult(success=True, data=novel,

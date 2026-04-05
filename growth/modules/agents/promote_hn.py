@@ -40,9 +40,19 @@ class PromoteHNAgentModule(Module):
             from growth.config import IDENTITIES_DIR
 
             config = _build_agent_config(IDENTITIES_DIR)
+            # Use strategy-selected identity if available
+            if context.identity_dir:
+                config.hn.session_dir = str(context.identity_dir / "session")
             state = RunState.create("growth-cli-hn-promote")
             result = await run_hn_promoter(state, {"ideas": input_data.data, "config": config})
-            submissions = result if isinstance(result, list) else [result]
+
+            # Legacy agent returns a dict with "submissions" key or a list
+            if isinstance(result, dict):
+                submissions = result.get("submissions", result.get("posts", [result]))
+            elif isinstance(result, list):
+                submissions = result
+            else:
+                submissions = [result]
 
             return ModuleResult(success=True, data=submissions,
                                 metadata={"items": len(input_data.data), "submitted": len(submissions)})

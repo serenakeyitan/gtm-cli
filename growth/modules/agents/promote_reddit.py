@@ -42,6 +42,9 @@ class PromoteRedditAgentModule(Module):
             from growth.config import IDENTITIES_DIR
 
             config = _build_agent_config(IDENTITIES_DIR)
+            # Use strategy-selected identity if available
+            if context.identity_dir:
+                config.reddit.session_dir = str(context.identity_dir / "session")
             subs = params.get("subreddits", "SaaS,startups,programming")
             config.reddit.target_subreddits = [s.strip() for s in subs.split(",")]
 

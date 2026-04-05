@@ -242,6 +242,8 @@ def _build_agent_config(identities_dir: Path) -> Any:
             self.user_agent = "growth-cli/0.1"
             self.target_subreddits = ["SaaS", "startups", "programming"]
             self.session_dir = str(identities_dir / "reddit")
+            self.post_stagger_seconds = 15
+            self.max_subreddits_per_idea = 3
 
     class _HNConfig:
         def __init__(self):
@@ -256,11 +258,18 @@ def _build_agent_config(identities_dir: Path) -> Any:
             self.promoter = "claude-sonnet-4-20250514"
             self.hn_promoter = "claude-sonnet-4-20250514"
 
+    class _GitHubConfig:
+        def __init__(self):
+            import os
+            self.owner = os.environ.get("GITHUB_OWNER", "")
+            self.token = os.environ.get("GITHUB_TOKEN", "")
+
     class _Config:
         def __init__(self):
             self.twitter = _TwitterConfig()
             self.reddit = _RedditConfig()
             self.hn = _HNConfig()
+            self.github = _GitHubConfig()
             self.models = _ModelsConfig()
 
     return _Config()

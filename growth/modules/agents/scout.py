@@ -41,6 +41,9 @@ class ScoutAgentModule(Module):
             from growth.config import IDENTITIES_DIR
 
             config = _build_agent_config(IDENTITIES_DIR)
+            # Use strategy-selected identity if available
+            if context.identity_dir:
+                config.twitter.cookie_path = str(context.identity_dir / "cookies.json")
             config.twitter.min_engagement = {
                 "likes": params.get("min_likes", 1000),
                 "retweets": params.get("min_retweets", 200),

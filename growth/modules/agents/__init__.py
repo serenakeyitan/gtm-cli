@@ -6,12 +6,18 @@ so they compose with tool modules, filters, and transforms.
 Requires: pip install growth-cli[agents]
 """
 
-try:
-    from growth.modules.agents.scout import *  # noqa
-    from growth.modules.agents.novelty_check import *  # noqa
-    from growth.modules.agents.build import *  # noqa
-    from growth.modules.agents.test import *  # noqa
-    from growth.modules.agents.promote_reddit import *  # noqa
-    from growth.modules.agents.promote_hn import *  # noqa
-except ImportError:
-    pass  # claude-code-sdk not installed
+import logging as _log
+
+# Import each agent module independently so one broken import doesn't disable all
+for _mod in [
+    "growth.modules.agents.scout",
+    "growth.modules.agents.novelty_check",
+    "growth.modules.agents.build",
+    "growth.modules.agents.test",
+    "growth.modules.agents.promote_reddit",
+    "growth.modules.agents.promote_hn",
+]:
+    try:
+        __import__(_mod)
+    except ImportError as e:
+        _log.getLogger(__name__).debug("Agent module %s unavailable: %s", _mod, e)

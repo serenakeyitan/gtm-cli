@@ -33,14 +33,16 @@ class BuildAgentModule(Module):
         try:
             from growth.agents.builder import run_builder
             from growth.engine.state import RunState
+            from growth.engine.runner import _build_agent_config
+            from growth.config import IDENTITIES_DIR
 
+            config = _build_agent_config(IDENTITIES_DIR)
             state = RunState.create("growth-cli-build")
             builds = []
             for idea in input_data.data:
-                result = await run_builder(state, [idea])
-                if isinstance(result, list):
-                    builds.extend(result)
-                else:
+                # Legacy agent expects {"idea": dict, "config": config}
+                result = await run_builder(state, {"idea": idea, "config": config})
+                if isinstance(result, dict):
                     builds.append(result)
 
             return ModuleResult(success=True, data=builds,

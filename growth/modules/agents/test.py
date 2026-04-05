@@ -33,10 +33,17 @@ class TestAgentModule(Module):
         try:
             from growth.agents.tester import run_tester
             from growth.engine.state import RunState
+            from growth.engine.runner import _build_agent_config
+            from growth.config import IDENTITIES_DIR
 
+            config = _build_agent_config(IDENTITIES_DIR)
             state = RunState.create("growth-cli-test")
-            results = await run_tester(state, input_data.data)
-            tested = results if isinstance(results, list) else [results]
+            tested = []
+            for build in input_data.data:
+                # Legacy agent expects {"build": dict, "idea": dict, "config": config}
+                result = await run_tester(state, {"build": build, "idea": build, "config": config})
+                if isinstance(result, dict):
+                    tested.append(result)
 
             return ModuleResult(success=True, data=tested,
                                 metadata={"builds": len(input_data.data), "tested": len(tested)})
