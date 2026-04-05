@@ -270,11 +270,11 @@ modules:
 
 ---
 
-### Phase 4: Strategy-as-Module ⬜ NEXT
+### Phase 4: Strategy-as-Module ✅ DONE
 
-- [ ] Reference a strategy as a module in another strategy
-- [ ] `growth modules create` scaffold tool
-- [ ] Strategy composability test (nested 3 levels)
+- [x] Reference a strategy as a module — `b1a8e52` in another strategy
+- [x] `growth modules create` scaffold tool — `b1a8e52`
+- [x] Strategy composability test (nested 3 levels) — `f57fe3b`
 
 #### 🎬 Phase 4 Showcase: "Strategies compose into bigger strategies"
 
@@ -303,7 +303,7 @@ modules:
 
 ---
 
-### Phase 5: Multi-Account ⬜
+### Phase 5: Multi-Account ⬜ NEXT
 
 - [ ] Multiple identities per platform
 - [ ] Identity roles (brand, organic, supporter, scout)
@@ -554,4 +554,4 @@ $ growth auto --strategy continuous-growth --budget 50-posts/week
 | Strategies | 7 (5 examples + 2 local routes) |
 | Prompts | 7 (6 agent prompts + 1 style guide) |
 | Codex reviews | 33 commits reviewed |
-| Codex findings fixed | 31 total |
+| Codex findings fixed | 42 total |
