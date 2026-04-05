@@ -304,13 +304,15 @@ def run_strategy_cmd(strategy_name, list_strategies, dry_run, param, json_output
                     for k, v in s.params.items()
                 )
 
-                # Detect execution mode from YAML comments or structure
+                # Detect execution mode from structure
                 if s.is_dag:
                     has_agent = any("agent/" in m.get("use", "") for m in s.raw.get("modules", {}).values())
                     mode = "[yellow]hybrid[/yellow]" if has_agent else "[green]module-dag[/green]"
-                else:
+                elif s.steps:
                     has_agent = any(step.type == "agent" for step in s.steps)
-                    mode = "[red]llm-agent[/red]" if has_agent else "[green]module-dag[/green]"
+                    mode = "[red]llm-agent[/red]" if has_agent else "[blue]legacy-steps[/blue]"
+                else:
+                    mode = "[dim]unknown[/dim]"
 
                 console.print(f"  [bold cyan]{s.name}[/bold cyan]  {mode}")
                 console.print(f"    {s.description}")
