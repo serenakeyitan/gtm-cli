@@ -53,6 +53,16 @@ class CoordinatorResult:
     wait_seconds: float = 0.0
     jitter_delay: float = 0.0  # recommended additional delay for human-like timing
 
+    @property
+    def wait_display(self) -> str:
+        """Human-readable wait time."""
+        if self.wait_seconds <= 0:
+            return ""
+        m, s = divmod(int(self.wait_seconds), 60)
+        if m > 0:
+            return f"{m}m {s:02d}s"
+        return f"{s}s"
+
 
 class RateLimitCoordinator:
     """5-layer rate limit coordinator.
@@ -88,10 +98,13 @@ class RateLimitCoordinator:
     def _save_state(self) -> None:
         import json
         from gtm.config import RATE_LIMITS_DIR
-        RATE_LIMITS_DIR.mkdir(parents=True, exist_ok=True)
-        path = RATE_LIMITS_DIR / "coordinator_state.json"
-        with open(path, "w") as f:
-            json.dump(self._state, f)
+        try:
+            RATE_LIMITS_DIR.mkdir(parents=True, exist_ok=True)
+            path = RATE_LIMITS_DIR / "coordinator_state.json"
+            with open(path, "w") as f:
+                json.dump(self._state, f)
+        except OSError as e:
+            log.warning("Could not persist coordinator state: %s", e)
 
     def check(
         self,

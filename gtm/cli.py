@@ -950,8 +950,9 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         alt = handle_account_failure(identity, mgr, platform, result.error or "Unknown error",
                                      interactive=not json_output)
         if alt:
-            # Check rate limit for alternative account
-            rl_alt = limiter.check(alt.name, platform, action)
+            # Check rate limit for alternative account (full 5-layer)
+            rl_alt = coordinator.check(alt.name, platform, action, proxy=alt.proxy,
+                                        target_url=kwargs.get("url", ""))
             if not rl_alt.allowed and not force:
                 console.print(f"  [yellow]Alternative account also rate-limited: {rl_alt.reason}[/yellow]")
                 sys.exit(1)
@@ -964,8 +965,8 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
             console.print(f"  Retrying with [bold]{alt.name}[/bold]...")
             result = await plat.post(alt.identity_dir, text, **kwargs)
             if result.success:
-                # Record rate limit + update identity metadata
-                limiter.record(alt.name, action)
+                # Record across all 5 layers + update identity metadata
+                coordinator.record(alt.name, platform, action, target_url=kwargs.get("url", ""))
                 alt.last_used = __import__("datetime").datetime.now().isoformat()
                 alt.save()
 
