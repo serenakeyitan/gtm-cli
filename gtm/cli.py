@@ -241,7 +241,7 @@ def status():
     table.add_column("Identity", style="bold")
     table.add_column("Role")
     table.add_column("Status")
-    table.add_column("Auth Method")
+    table.add_column("Proxy", style="dim")
 
     for identity in identities:
         status_str = {
@@ -259,12 +259,14 @@ def status():
             "default": "[dim]default[/dim]",
         }.get(identity.role, identity.role)
 
+        proxy_str = identity.proxy[:30] + "..." if identity.proxy and len(identity.proxy) > 30 else (identity.proxy or "direct")
+
         table.add_row(
             identity.platform,
             identity.name,
             role_str,
             status_str,
-            identity.auth_method,
+            proxy_str,
         )
 
     console.print(table)

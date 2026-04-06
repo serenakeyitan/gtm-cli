@@ -48,8 +48,11 @@ def select_account(
     Raises:
         ValueError if no accounts available
     """
-    # --as flag: explicit selection
+    # --as flag: explicit selection by name OR by role
     if as_flag:
+        # Check if it's a role name (brand, organic, supporter, scout)
+        if as_flag in ROLE_CHOICES:
+            return _select_by_role(mgr, platform, as_flag, interactive)
         return mgr.get(as_flag)
 
     accounts = mgr.list_platform(platform)
@@ -72,6 +75,41 @@ def select_account(
         return healthy[0]  # non-interactive: use first
 
     return _prompt_account_selection(healthy, platform)
+
+
+def _select_by_role(
+    mgr: IdentityManager,
+    platform: str,
+    role: str,
+    interactive: bool = True,
+) -> Identity:
+    """Select an account by role. Picks the healthiest, least-recently-used."""
+    accounts = mgr.list_platform(platform)
+    matching = [a for a in accounts if a.role == role and a.status in ("healthy", "warning")]
+
+    if not matching:
+        raise ValueError(
+            f"No healthy {platform} account with role '{role}'. "
+            f"Available roles: {set(a.role for a in accounts) or 'none'}"
+        )
+
+    if len(matching) == 1:
+        return matching[0]
+
+    # Sort by: healthy first, then least-recently-used
+    def sort_key(a: Identity):
+        health = 0 if a.status == "healthy" else 1
+        last = a.last_used or "0000"
+        return (health, last)
+
+    matching.sort(key=sort_key)
+
+    if not interactive:
+        return matching[0]
+
+    # Multiple matches — ask user
+    console.print(f"\n  [bold]{len(matching)} '{role}' accounts on {platform}:[/bold]")
+    return _prompt_account_selection(matching, platform)
 
 
 def _prompt_account_selection(accounts: list[Identity], platform: str) -> Identity:

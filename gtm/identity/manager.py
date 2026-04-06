@@ -33,6 +33,7 @@ class Identity:
     auth_method: str = "unknown"  # "password", "browser", "cookies_manual"
     role: str = "default"  # "brand", "organic", "supporter", "scout", "default"
     rate_profile: str = "conservative"  # "conservative", "moderate", "aggressive"
+    proxy: str = ""  # "socks5://user:pass@host:port" or "http://host:port" or "" (direct)
     status: str = "healthy"  # "healthy", "warning", "suspended", "expired"
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     last_used: str | None = None
@@ -96,6 +97,18 @@ class Identity:
             json.dump(health, f, indent=2)
         self.status = "healthy" if healthy else "expired"
         self.save()
+
+    def mark_suspended(self, reason: str = "Account suspended by platform") -> None:
+        """Mark this identity as suspended (banned)."""
+        self.status = "suspended"
+        self.save_health(False, reason)
+        log.warning("Identity %s marked as SUSPENDED: %s", self.name, reason)
+
+    def mark_warning(self, reason: str = "Possible detection") -> None:
+        """Mark this identity with a warning (shadow-ban, reduced reach)."""
+        self.status = "warning"
+        self.save_health(True, reason)
+        log.warning("Identity %s marked as WARNING: %s", self.name, reason)
 
 
 class IdentityManager:
