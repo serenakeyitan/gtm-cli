@@ -17,7 +17,7 @@
 | v0.2 Phase 2 | ✅ Done | Transform modules | 4/4 |
 | v0.2 Phase 3 | ✅ Done | DAG runner | 7/7 |
 | v0.2 Phase 4 | ✅ Done | Strategy-as-module | 3/3 |
-| v0.2 Phase 5 | ⬜ | Multi-account | 0/7 |
+| v0.2 Phase 5 | ✅ Done | Multi-account | 0/7 |
 | v0.3 | ⬜ | Intelligence (skill, generation, listening) | 0/7 |
 | v0.4 | ⬜ | Growth Cloud (managed accounts/IPs) | 0/6 |
 | v0.5 | ⬜ | GitHub integration | 0/4 |
@@ -301,15 +301,15 @@ modules:
 
 ---
 
-### Phase 5: Multi-Account ⬜ NEXT
+### Phase 5: Multi-Account ✅ DONE
 
-- [ ] Multiple identities per platform
-- [ ] Identity roles (brand, organic, supporter, scout)
-- [ ] `--as` supports roles: `--as supporter` (picks from pool)
-- [ ] BYOP proxy support (SOCKS5/HTTP per identity)
-- [ ] Rate Limit Coordinator (5 layers)
-- [ ] Ban detection + identity status
-- [ ] Auto-rotate to backup identity on failure
+- [x] Multiple identities per platform — `dd290e0`
+- [x] Identity roles (brand, organic, supporter, scout) — `dd290e0`
+- [x] `--as` supports roles: `--as supporter` (picks from pool)
+- [x] BYOP proxy support (SOCKS5/HTTP per identity)
+- [x] Rate Limit Coordinator (5 layers)
+- [x] Ban detection + identity status
+- [x] Auto-rotate to backup identity on failure — `dd290e0`
 
 #### 🎬 Phase 5 Showcase: "Coordinated multi-account campaigns"
 
