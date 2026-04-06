@@ -18,7 +18,7 @@
 | v0.2 Phase 3 | ✅ Done | DAG runner | 7/7 |
 | v0.2 Phase 4 | ✅ Done | Strategy-as-module | 3/3 |
 | v0.2 Phase 5 | ✅ Done | Multi-account | 0/7 |
-| v0.3 | ⬜ | Intelligence (skill, generation, listening) | 0/7 |
+| v0.3 | 🔧 | Intelligence (skill, generation, listening) | 2/7 |
 | v0.4 | ⬜ | Growth Cloud (managed accounts/IPs) | 0/6 |
 | v0.5 | ⬜ | GitHub integration | 0/4 |
 | v1.0 | ⬜ | Public launch | 0/5 |
