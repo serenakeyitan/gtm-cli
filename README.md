@@ -144,7 +144,7 @@ See [docs/architecture-principles.md](./docs/architecture-principles.md) for det
 
 ## Account Safety
 
-Rate limits are always on. Cannot be bypassed.
+Rate limits are always on. `--force` exists but prints a warning and requires confirmation.
 
 ```
 Twitter:  2 posts/hr, 6/day, 5min cooldown

@@ -42,7 +42,7 @@
 - [x] Rate limiter (always on, conservative defaults) — `701e98d`
 - [x] Identity manager (add, list, status, health) — `701e98d`
 - [x] Strategy YAML loader + sequential runner — `cca2ca1`
-- [x] 3 example strategies (twitter-scout, hn-trending, cross-search) — `cca2ca1`
+- [x] Example strategies (replaced by DAG versions in v0.2) — `cca2ca1`
 - [x] Route 1 (GitHub Growth) + Route 2 (HN Submit) migrated — `7d3b78c`
 - [x] All 6 agents migrated (scout, novelty, builder, tester, promoter, hn_promoter) — `7d3b78c`
 - [x] Output git logger (auto-commit every action) — `cca2ca1`
@@ -102,7 +102,7 @@ $ growth traction
 ## v0.2 — "Composable Module System" 🔧 IN PROGRESS
 
 > Every piece is a Lego block. Same blocks, different arrangement.
-> Full spec: [design-spec-v02-modules.md](./docs/design-spec-v02-modules.md)
+> See [docs/architecture-principles.md](./docs/architecture-principles.md) for design details.
 
 ### Phase 1: Foundation ✅ DONE
 
