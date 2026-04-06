@@ -31,6 +31,7 @@ class Identity:
     platform: str  # "twitter", "reddit", "hn"
     username: str
     auth_method: str = "unknown"  # "password", "browser", "cookies_manual"
+    role: str = "default"  # "brand", "organic", "supporter", "scout", "default"
     rate_profile: str = "conservative"  # "conservative", "moderate", "aggressive"
     status: str = "healthy"  # "healthy", "warning", "suspended", "expired"
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())

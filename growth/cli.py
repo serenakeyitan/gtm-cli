@@ -239,9 +239,9 @@ def status():
     table = Table(title="Connected Accounts")
     table.add_column("Platform", style="cyan")
     table.add_column("Identity", style="bold")
+    table.add_column("Role")
     table.add_column("Status")
     table.add_column("Auth Method")
-    table.add_column("Rate Profile")
 
     for identity in identities:
         status_str = {
@@ -251,12 +251,20 @@ def status():
             "expired": "[red]❌ Expired[/red]",
         }.get(identity.status, identity.status)
 
+        role_str = {
+            "brand": "[bold]brand[/bold]",
+            "organic": "organic",
+            "supporter": "supporter",
+            "scout": "[dim]scout[/dim]",
+            "default": "[dim]default[/dim]",
+        }.get(identity.role, identity.role)
+
         table.add_row(
             identity.platform,
             identity.name,
+            role_str,
             status_str,
             identity.auth_method,
-            identity.rate_profile,
         )
 
     console.print(table)
@@ -853,9 +861,10 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
     from growth.identity.manager import IdentityManager
     from growth.platforms.base import get_platform
     from growth.safety.rate_limiter import get_rate_limiter
+    from growth.identity.selector import select_account, handle_account_failure
 
     mgr = IdentityManager()
-    identity = mgr.resolve_as_flag(as_identity, platform)
+    identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 
@@ -920,18 +929,35 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
     else:
         if json_output:
             click.echo(json.dumps({"success": False, "error": result.error}))
+            sys.exit(1)
+
+        # Post failed — ask user: rotate to another account or stop?
+        alt = handle_account_failure(identity, mgr, platform, result.error or "Unknown error",
+                                     interactive=not json_output)
+        if alt:
+            # Retry with the alternative account
+            console.print(f"  Retrying with [bold]{alt.name}[/bold]...")
+            result = await plat.post(alt.identity_dir, text, **kwargs)
+            if result.success:
+                from growth.output.logger import log_post
+                log_post(platform, alt.name, text, {"post_id": result.post_id, "url": result.url}, **kwargs)
+                console.print(f"[green]✅ Posted![/green]")
+                if result.url:
+                    console.print(f"   {result.url}")
+            else:
+                console.print(f"[red]❌ Retry also failed: {result.error}[/red]")
+                sys.exit(1)
         else:
-            console.print(f"[red]❌ Failed: {result.error}[/red]")
-        sys.exit(1)
+            sys.exit(1)
 
 
 async def _do_user_tweets(platform: str, username: str, as_identity, count: int, json_output: bool):
     """Fetch recent tweets from a specific user."""
     from growth.identity.manager import IdentityManager
-    from growth.platforms.twitter.client import TwitterClient, TwitterClientError
+    from growth.identity.selector import select_account
 
     mgr = IdentityManager()
-    identity = mgr.resolve_as_flag(as_identity, platform)
+    identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
     cookie_path = identity.identity_dir / "cookies.json"
     client = TwitterClient(cookie_path=cookie_path)
 
@@ -1026,10 +1052,11 @@ async def _do_trending(platform: str, count: int, json_output: bool):
 async def _do_search(platform: str, query: str, as_identity, count: int, json_output: bool):
     """Generic search action."""
     from growth.identity.manager import IdentityManager
+    from growth.identity.selector import select_account
     from growth.platforms.base import get_platform
 
     mgr = IdentityManager()
-    identity = mgr.resolve_as_flag(as_identity, platform)
+    identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
     plat = get_platform(platform)
 
     try:
@@ -1053,11 +1080,12 @@ async def _do_search(platform: str, query: str, as_identity, count: int, json_ou
 async def _do_engage(platform: str, target_id: str, action: str, as_identity, dry_run, force):
     """Generic engage action (like, retweet, upvote)."""
     from growth.identity.manager import IdentityManager
+    from growth.identity.selector import select_account
     from growth.platforms.base import get_platform
     from growth.safety.rate_limiter import get_rate_limiter
 
     mgr = IdentityManager()
-    identity = mgr.resolve_as_flag(as_identity, platform)
+    identity = select_account(mgr, platform, as_flag=as_identity, interactive=True)
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 
@@ -1082,11 +1110,12 @@ async def _do_engage(platform: str, target_id: str, action: str, as_identity, dr
 async def _do_reply(platform: str, target_id: str, text: str, as_identity, dry_run, force):
     """Generic reply action."""
     from growth.identity.manager import IdentityManager
+    from growth.identity.selector import select_account
     from growth.platforms.base import get_platform
     from growth.safety.rate_limiter import get_rate_limiter
 
     mgr = IdentityManager()
-    identity = mgr.resolve_as_flag(as_identity, platform)
+    identity = select_account(mgr, platform, as_flag=as_identity, interactive=True)
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 
@@ -1245,6 +1274,22 @@ def _parse_cookies(raw: str) -> dict[str, str]:
     return cookie_dict
 
 
+def _prompt_and_save_identity(platform: str, username: str, metadata: dict) -> None:
+    """Prompt for role, then save identity."""
+    from growth.identity.selector import prompt_role
+    from growth.identity.manager import IdentityManager
+
+    # Check if user already has accounts on this platform
+    mgr = IdentityManager()
+    existing = mgr.list_platform(platform)
+
+    if existing:
+        console.print(f"\n  [dim]You have {len(existing)} other {platform} account(s): {', '.join(a.name for a in existing)}[/dim]")
+
+    role = prompt_role(username)
+    _save_identity(platform, username, metadata, role=role)
+
+
 def _save_cookies(username: str, identity_dir: Path, cookie_dict: dict) -> None:
     """Save cookies to disk with secure permissions."""
     import os
@@ -1260,9 +1305,7 @@ def _save_cookies(username: str, identity_dir: Path, cookie_dict: dict) -> None:
     os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600
     os.chmod(identity_dir, stat.S_IRWXU)  # 0700
 
-    _save_identity("twitter", username, {"auth_method": "cookies_manual"})
-    console.print(f"\n  [green]✅ Cookies saved![/green]")
-    console.print(f"     Identity: [bold]twitter:{username}[/bold]")
+    _prompt_and_save_identity("twitter", username, {"auth_method": "cookies_manual"})
     console.print(f"\n     Test it: [bold]growth twitter search 'AI agents' --count 3[/bold]")
 
 
@@ -1357,9 +1400,7 @@ def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: st
             _json.dump({"user_cookie": cookie_dict["user"]}, f, indent=2)
         os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)
 
-    _save_identity(platform, username, {"auth_method": "cookies_manual"})
-    console.print(f"\n  [green]✅ Cookies saved![/green]")
-    console.print(f"     Identity: [bold]{platform}:{username}[/bold]")
+    _prompt_and_save_identity(platform, username, {"auth_method": "cookies_manual"})
 
     if platform == "reddit":
         console.print(f"\n     Test it: [bold]growth reddit search 'test' --count 1[/bold]")
@@ -1377,7 +1418,7 @@ def _handle_auth_error(error: Exception, platform: str) -> None:
         sys.exit(1)
 
 
-def _save_identity(platform: str, username: str, metadata: dict):
+def _save_identity(platform: str, username: str, metadata: dict, role: str = "default"):
     """Create and save an Identity after successful auth."""
     from growth.identity.manager import Identity
 
@@ -1386,6 +1427,7 @@ def _save_identity(platform: str, username: str, metadata: dict):
         platform=platform,
         username=username,
         auth_method=metadata.get("auth_method", "unknown"),
+        role=role,
         rate_profile="conservative",
     )
     identity.save()
