@@ -157,16 +157,16 @@ HN:       1 submit/hr, 2/day, 30min cooldown
 ## Strategy Locations
 
 ```
-~/.config/growth/strategies/    Your strategies (local, private, never on GitHub)
+~/.config/gtm/strategies/    Your strategies (local, private, never on GitHub)
 strategies/examples/            Sample strategies (shipped with repo, 8 examples)
 ```
 
 ## Project Structure
 
 ```
-growth/
+gtm/
 ├── cli.py              CLI entry point
-├── config.py            XDG config (~/.config/growth/)
+├── config.py            XDG config (~/.config/gtm/)
 ├── modules/             30 composable modules
 │   ├── sources/         Scrape platforms (5)
 │   ├── filters/         Process data (4)

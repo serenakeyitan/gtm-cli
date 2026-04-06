@@ -18,7 +18,7 @@
 | v0.2 Phase 3 | ✅ Done | DAG runner | 7/7 |
 | v0.2 Phase 4 | ✅ Done | Strategy-as-module | 3/3 |
 | v0.2 Phase 5 | ⬜ | Multi-account | 0/7 |
-| v0.3 | ⬜ | Intelligence (chat, generation, listening) | 0/8 |
+| v0.3 | ⬜ | Intelligence (skill, generation, listening) | 0/7 |
 | v0.4 | ⬜ | Growth Cloud (managed accounts/IPs) | 0/6 |
 | v0.5 | ⬜ | GitHub integration | 0/4 |
 | v1.0 | ⬜ | Public launch | 0/5 |
@@ -357,38 +357,42 @@ $ gtm status
 
 ## v0.3 — "Intelligence" ⬜
 
-- [ ] Chat TUI mode (`gtm chat`)
-- [ ] NL → strategy planning
+- [ ] Enhanced `/gtm` skill for Claude Code / Codex (the agent IS the UI — no TUI needed)
+- [ ] NL → strategy planning (describe campaign, agent builds YAML)
 - [ ] Content generation (`--generate` flag)
-- [ ] Platform-native tone adaptation
-- [ ] Social listening
-- [ ] Traction alerts
-- [ ] Traction-triggered strategies
-- [ ] Agent modules
+- [ ] Platform-native tone adaptation via transform/rewrite
+- [ ] Social listening (continuous monitoring)
+- [ ] Traction alerts (webhook/CLI notification)
+- [ ] Traction-triggered strategies ("score > 50 → amplify")
 
-#### 🎬 v0.3 Showcase: "Talk to your growth engine"
+#### 🎬 v0.3 Showcase: "Your agent IS the growth UI"
 
-```bash
-$ gtm chat
+**Why no TUI?** Your target user is already inside Claude Code. Building a separate `gtm chat` is building a worse Claude Code. Instead, the `/gtm` skill makes Claude Code understand growth workflows natively.
+
+```
+# Inside Claude Code — just talk naturally:
+
 You: launch my new feature on HN, Twitter, and Reddit.
-     product is "GrowthCLI", url is growthcli.dev
+     product is "gtm-cli", url is gtm-cli.dev
      use organic tone on reddit
 
-🤖 Planning "Launch Campaign" strategy...
+Claude: I'll plan a launch campaign using gtm-cli.
 
-  Step 1: Submit to HN as hn:reddity
-          "Show HN: GrowthCLI – Terminal-native growth automation"
-  Step 2: Tweet from twitter:1_reddit27179 (5-15min after)
-          "Just posted our Show HN! ..."
-  Step 3: Cross-post to r/SaaS, r/startups (30min-2h)
-          Organic-toned posts
-  Step 4: Monitor traction for 24h
-          Alert if HN score > 50
+> gtm run combined-routes --json -p query="gtm-cli" -p min_likes=50
 
-Execute? [y/edit/n]
+  ✅ scout (16 tweets) → filter (8 viral) → 
+  Route 1: 3 Reddit candidates
+  Route 2: 3 HN candidates
+
+Here are the top candidates:
+1. [HN] "Show HN: gtm-cli — Terminal-native GTM automation" 
+2. [Reddit] r/SaaS post adapted with organic tone
+3. ...
+
+Want me to post these? I'll stagger them over 2 hours.
 ```
 
-**The key insight:** You describe what you want in plain English. The AI composes the right modules, picks the right accounts, schedules human-like timing. Same result as writing YAML by hand, but instant.
+**The key insight:** Claude Code + SKILL.md = better than any TUI we could build. The agent reads `--json` output, reasons about it, and suggests actions. We just need a smarter skill file.
 
 ---
 
@@ -414,7 +418,7 @@ $ gtm cloud shop
   └── Aged (1000+ karma)         $55
 
 $ gtm cloud buy twitter-warmed --count 3
-  → Payment: https://growth.cloud/checkout/xxx
+  → Payment: https://gtm.cloud/checkout/xxx
   → After payment: gtm cloud redeem <code>
 
 $ gtm cloud redeem abc123
@@ -438,7 +442,7 @@ $ gtm cloud redeem abc123
 #### 🎬 v0.5 Showcase: "PRs for content, not just code"
 
 ```bash
-$ growth draft "Announce our Series A"
+$ gtm draft "Announce our Series A"
   → Branch: content/series-a-2026-04
   → PR #42 opened for review
 
@@ -496,14 +500,14 @@ $ gtm run launch-campaign -p product="gtm-cli" -p url="github.com/serenakeyitan/
 #### 🎬 v2.0 Showcase: "A marketplace of growth playbooks"
 
 ```bash
-$ growth marketplace search "product-hunt-launch"
+$ gtm marketplace search "product-hunt-launch"
   📦 ph-blitz (by @growthguru) — 847 installs
      Coordinated PH + Twitter + Reddit launch
   📦 ph-slow-burn (by @indiehacker) — 312 installs
      Week-long warmup campaign
 
-$ growth marketplace install ph-blitz
-  → Strategy saved to ~/.config/growth/strategies/ph-blitz.yaml
+$ gtm marketplace install ph-blitz
+  → Strategy saved to ~/.config/gtm/strategies/ph-blitz.yaml
 
 $ gtm run ph-blitz -p product="my-saas"
 ```
@@ -520,7 +524,7 @@ $ gtm run ph-blitz -p product="my-saas"
 #### 🎬 v3.0 Showcase: "Set it and forget it"
 
 ```bash
-$ growth auto --strategy continuous-growth --budget 50-posts/week
+$ gtm auto --strategy continuous-gtm --budget 50-posts/week
   Agent running... monitoring all platforms.
 
   Week 1 report:
