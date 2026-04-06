@@ -16,7 +16,7 @@
 | v0.2 Phase 1 | ✅ Done | Module system foundation (15 modules) | 8/8 |
 | v0.2 Phase 2 | ✅ Done | Transform modules | 4/4 |
 | v0.2 Phase 3 | ✅ Done | DAG runner | 7/7 |
-| v0.2 Phase 4 | ⬜ | Strategy-as-module | 0/3 |
+| v0.2 Phase 4 | ✅ Done | Strategy-as-module | 3/3 |
 | v0.2 Phase 5 | ⬜ | Multi-account | 0/7 |
 | v0.3 | ⬜ | Intelligence (chat, generation, listening) | 0/8 |
 | v0.4 | ⬜ | Growth Cloud (managed accounts/IPs) | 0/6 |
