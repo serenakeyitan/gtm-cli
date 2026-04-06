@@ -876,7 +876,14 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
     from gtm.identity.selector import select_account, handle_account_failure
 
     mgr = IdentityManager()
-    identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
+    try:
+        identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
+    except ValueError as e:
+        if json_output:
+            click.echo(json.dumps({"error": str(e)}))
+        else:
+            console.print(f"\n  [red]❌ {e}[/red]\n")
+        sys.exit(1)
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 
@@ -989,7 +996,14 @@ async def _do_user_tweets(platform: str, username: str, as_identity, count: int,
     from gtm.platforms.twitter.client import TwitterClient
 
     mgr = IdentityManager()
-    identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
+    try:
+        identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
+    except ValueError as e:
+        if json_output:
+            click.echo(json.dumps({"error": str(e)}))
+        else:
+            console.print(f"\n  [red]❌ {e}[/red]\n")
+        sys.exit(1)
     cookie_path = identity.identity_dir / "cookies.json"
     client = TwitterClient(cookie_path=cookie_path)
 
@@ -1088,7 +1102,14 @@ async def _do_search(platform: str, query: str, as_identity, count: int, json_ou
     from gtm.platforms.base import get_platform
 
     mgr = IdentityManager()
-    identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
+    try:
+        identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
+    except ValueError as e:
+        if json_output:
+            click.echo(json.dumps({"error": str(e)}))
+        else:
+            console.print(f"\n  [red]❌ {e}[/red]\n")
+        sys.exit(1)
     plat = get_platform(platform)
 
     try:
@@ -1117,7 +1138,11 @@ async def _do_engage(platform: str, target_id: str, action: str, as_identity, dr
     from gtm.safety.rate_limiter import get_rate_limiter
 
     mgr = IdentityManager()
-    identity = select_account(mgr, platform, as_flag=as_identity, interactive=True)
+    try:
+        identity = select_account(mgr, platform, as_flag=as_identity, interactive=True)
+    except ValueError as e:
+        console.print(f"\n  [red]❌ {e}[/red]\n")
+        sys.exit(1)
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 
@@ -1147,7 +1172,11 @@ async def _do_reply(platform: str, target_id: str, text: str, as_identity, dry_r
     from gtm.safety.rate_limiter import get_rate_limiter
 
     mgr = IdentityManager()
-    identity = select_account(mgr, platform, as_flag=as_identity, interactive=True)
+    try:
+        identity = select_account(mgr, platform, as_flag=as_identity, interactive=True)
+    except ValueError as e:
+        console.print(f"\n  [red]❌ {e}[/red]\n")
+        sys.exit(1)
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 

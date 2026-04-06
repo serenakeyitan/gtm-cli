@@ -1,88 +1,163 @@
 ---
 name: gtm-cli
 description: |
-  Terminal-native marketing automation. Post to Twitter, Reddit, and HN.
-  Scout trends, draft content, run multi-platform strategies.
-  Use when asked to help with social media, content marketing,
-  go-to-market, or growth engineering tasks.
+  Terminal-native go-to-market CLI. Automate Twitter, Reddit, and HN from
+  the terminal. 30+ composable modules. Parallel execution. Multi-account.
+  Use when asked about social media, marketing, growth, content, posting,
+  engagement tracking, or go-to-market tasks.
 allowed-tools:
   - Bash
   - Read
   - Write
 ---
 
-## CRITICAL: Direct API vs LLM — Read This First
+## CRITICAL: Direct API First
 
-**Default to direct API calls. Only use LLM when a task genuinely requires reasoning.**
+**NEVER use LLM agents when composable modules can do the job.**
 
-| Task | Use | Why |
-|------|-----|-----|
-| Fetch tweets from accounts | `gtm twitter user <name>` (direct API) | No reasoning needed |
-| Search Twitter/Reddit/HN | `gtm <platform> search` (direct API) | No reasoning needed |
-| Filter by engagement/keywords | `gtm run` with filter modules (direct) | Math, not intelligence |
-| Extract URLs from tweets | `gtm run` with transform/extract_url (direct) | Pattern matching |
-| Deduplicate content | `gtm run` with filter/deduplicate (direct) | Set comparison |
-| Adapt content for platform | `gtm run` with transform/platform_adapt (direct) | Deterministic rules |
-| **Write organic Reddit post** | **LLM needed** — use transform/rewrite or agent/promote_reddit | Needs creativity + style |
-| **Judge if an idea is novel** | **LLM needed** — use agent/novelty_check or agent/synthesize | Needs reasoning |
-| **Pick best items to submit** | **LLM needed** — use agent/synthesize (1 API call) | Needs judgment |
+```
+Can a module do it? → YES → use gtm commands (free, instant)
+                      NO  → use agent/synthesize (1 LLM call, $0.01)
+                      
+NEVER use agent/scout (175 API calls, $1). Use twitter/user_tweets × N instead.
+```
 
-**NEVER use a full LLM agent (agent/scout) when composable modules can do the same job.**
-- agent/scout = 175 Claude API calls, 15-30 min, ~$1.00
-- twitter/user_tweets × 4 + filter/engagement = 0 Claude API calls, 30 sec, $0.00
+## Quick Reference
 
-**When building strategies, compose modules in this order:**
-1. Source modules (direct API) — scrape data
-2. Filter modules (direct) — reduce data
-3. Transform modules (direct) — adapt format
-4. agent/synthesize (1 LLM call) — ONLY IF you need intelligent selection
-5. Action modules (direct API) — post/engage
+```bash
+# Search (no auth needed for Reddit/HN)
+gtm twitter search "query"           # needs auth
+gtm twitter user karpathy --count 5  # needs auth
+gtm reddit search "query" --sub SaaS
+gtm hn search "query"
+gtm hn top --count 10
 
-## Strategy Execution Modes
+# Post (rate-limited, always --dry-run first)
+gtm twitter post "text" --dry-run
+gtm reddit submit --sub X --title "..." --body "..." --dry-run
+gtm hn submit --title "..." --url "..." --dry-run
 
-Each strategy in `gtm run --list` uses one of two modes:
+# Strategies
+gtm run --list                           # see all + execution mode
+gtm run <name> -p key=value --dry-run    # preview
+gtm run <name> -p key=value              # execute
+gtm run combined-routes -p query="AI"    # Route 1+2 composed
 
-| Mode | When | Speed | Cost | Example |
-|------|------|-------|------|---------|
-| **Module DAG** (default) | Strategy has `modules:` key | 30 seconds | $0.00-0.01 | hn-scout-and-filter, combined-routes |
-| **LLM Agent** (legacy) | Strategy has `steps:` with `type: agent` | 15-30 min | $0.50-2.00 | route1-github-growth, route2-hn-submit |
+# Modules
+gtm modules list                         # 30+ composable blocks
+gtm modules info <name>                  # params + schema
+gtm modules create my-strategy           # scaffold new YAML
 
-**Always prefer Module DAG strategies.** Use LLM Agent strategies only when the full agent is genuinely needed (e.g., building GitHub repos from ideas).
+# Track + Manage
+gtm traction                             # live engagement
+gtm traction --json                      # for analysis
+gtm status                               # connected accounts
+gtm log                                  # recent activity
+```
 
-**Hybrid strategies** (like route2-hybrid) use modules for everything + agent/synthesize for one LLM call at the end. Best of both worlds.
+## Execution Modes (CHECK BEFORE RUNNING)
 
-## Available Commands
+```bash
+gtm run --list    # shows mode per strategy
+```
 
-- `gtm status` — check connected accounts
-- `gtm twitter post --as <id> "text"` — post a tweet
-- `gtm twitter search "query"` — search tweets
-- `gtm twitter user <username>` — get user's latest tweets
-- `gtm twitter like --as <id> <tweet_id>` — like a tweet
-- `gtm reddit search "query" --sub <subreddit>` — search Reddit
-- `gtm reddit submit --sub <sub> --title "..." --body "..."` — post to Reddit
-- `gtm hn search "query"` — search Hacker News
-- `gtm hn top` — HN front page
-- `gtm hn submit --title "..." --url "..."` — submit to HN
-- `gtm run <strategy> [--dry-run]` — run a strategy
-- `gtm run --list` — list available strategies
-- `gtm modules list` — browse composable modules
-- `gtm modules info <name>` — module details
-- `gtm modules create <name>` — scaffold new strategy
-- `gtm traction` — check live engagement
-- `gtm traction --json` — engagement data for analysis
+| Mode | Icon | Speed | Cost | When to use |
+|------|------|-------|------|-------------|
+| `module-dag` | 🟢 | 30s | $0.00 | Default. Scrape, filter, transform, post |
+| `hybrid` | 🟡 | 60s | $0.01 | Need intelligent selection (1 LLM call) |
+| `llm-agent` | 🔴 | 30min | $1.00 | AVOID. Only for code generation tasks |
+| `legacy-steps` | 🔵 | varies | varies | Old format, being migrated |
 
-## Traction Analysis
+**Always prefer 🟢 module-dag strategies.**
 
-When the user asks about engagement, performance, or "how are my posts doing":
+## How to Handle Common Tasks
 
-1. Run `gtm traction --json` to get live engagement data
-2. Analyze the numbers: compare across platforms, identify trends, spot outliers
-3. Give actionable recommendations
+### "Search for trending topics"
+```bash
+gtm hn top --count 15                    # HN front page
+gtm twitter user karpathy --count 10     # specific account's tweets
+gtm reddit search "AI launch" --sub SaaS # subreddit search
+gtm run cross-platform-scout -p query="AI agents"  # all 3 at once
+```
 
-## Tips
+### "Post across platforms"
+```bash
+# ALWAYS dry-run first
+gtm twitter post "text" --dry-run
+gtm reddit submit --sub SaaS --title "..." --body "..." --dry-run
+gtm hn submit --title "..." --url "..." --dry-run
 
-- Always use `--dry-run` first to preview actions
-- Use `--json` flag for structured output
-- Rate limits are always on — accounts are protected by default
-- Use burner accounts, not your personal accounts
-- Compose small modules (twitter/search → filter → transform → action) instead of monolithic agents
+# If user approves, remove --dry-run
+```
+
+### "Analyze my traction / how are my posts doing"
+```bash
+gtm traction --json
+```
+Then analyze the JSON: compare platforms, identify trends, recommend actions.
+
+### "Create a campaign / strategy"
+```bash
+gtm modules list                    # show available blocks
+gtm modules create my-campaign      # scaffold YAML
+# Then edit ~/.config/gtm/strategies/my-campaign.yaml
+gtm run my-campaign --dry-run       # preview
+```
+
+### "Which account should I use?"
+When user has multiple accounts, `gtm` will prompt interactively.
+With `--as`, specify by name or role:
+```bash
+gtm twitter post "..." --as brand_main     # specific account
+gtm twitter post "..." --as supporter      # any supporter account
+```
+
+### "An account failed / got rate limited"
+`gtm` asks: rotate to another account or stop?
+Rate limits are always enforced. `--force` exists but warns loudly.
+
+## Strategy YAML Format
+
+```yaml
+name: "My Strategy"
+version: "2.0"
+params:
+  query: { required: true }
+modules:
+  scout:    { use: twitter/search, params: { query: "{{ query }}" } }
+  filter:   { use: filter/engagement, input: scout, params: { min_likes: 100 } }
+  adapt:    { use: transform/platform_adapt, input: filter, params: { platform: reddit } }
+```
+
+Modules with no mutual dependencies run in **parallel** automatically.
+
+## Module Categories
+
+| Category | Count | Examples |
+|----------|-------|---------|
+| SOURCES | 5 | twitter/search, hn/top_stories, reddit/search |
+| FILTERS | 4 | filter/engagement, filter/keyword, filter/deduplicate |
+| TRANSFORMS | 4 | transform/rewrite, transform/extract_url, transform/platform_adapt |
+| ACTIONS | 5 | twitter/post, reddit/submit, hn/submit_link |
+| CONTROL | 4 | control/delay, control/jitter, control/for_each, control/condition |
+| AGENTS | 8 | agent/synthesize, agent/scout, strategy/* |
+| MONITORS | 1 | track/engagement |
+
+## Content Style Guide
+
+When generating content for posting, follow platform-specific rules:
+- **Reddit**: all lowercase, no self-promotion phrases, organic tone
+- **HN**: original source URL, don't editorialize title, no clickbait  
+- **Twitter**: 280 char limit, hashtags okay, threads for long content
+
+Full rules: `prompts/style_guide.md`
+
+## File Locations
+
+```
+~/.config/gtm/                  User config (private)
+├── identities/                 Accounts + cookies
+├── strategies/                 User's strategies
+├── rate_limits/                Rate limit state
+└── output/                     Posted content log (git repo)
+```
