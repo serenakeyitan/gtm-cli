@@ -940,6 +940,11 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
             if not rl_alt.allowed and not force:
                 console.print(f"  [yellow]Alternative account also rate-limited: {rl_alt.reason}[/yellow]")
                 sys.exit(1)
+            if not rl_alt.allowed and force:
+                console.print("[bold red]⚠️  FORCE OVERRIDE on alternative account[/bold red]")
+                console.print(f"Bypassing: {rl_alt.reason}")
+                if not click.confirm("Continue?", default=False):
+                    sys.exit(0)
 
             console.print(f"  Retrying with [bold]{alt.name}[/bold]...")
             result = await plat.post(alt.identity_dir, text, **kwargs)
