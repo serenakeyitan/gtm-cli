@@ -1,4 +1,4 @@
-# growth-cli Content Style Guide
+# gtm-cli Content Style Guide
 
 > Inherited from the growth-sop-pipeline. Battle-tested rules from real posts
 > that got removed vs posts that worked. Used by transform modules and agents.

@@ -1,4 +1,4 @@
-# growth-cli — Agent Instructions
+# gtm-cli — Agent Instructions
 
 ## CRITICAL RULE: Direct API First, LLM Last
 
@@ -54,14 +54,14 @@ If you see rate limit errors, the pipeline still completes via fallback.
 
 ## Available Modules
 
-Run `growth modules list` for the full catalog (30+ modules).
+Run `gtm modules list` for the full catalog (30+ modules).
 
 ## Key Commands
 
 ```bash
-growth run --list                    # See all strategies + their execution mode
-growth modules list                  # Browse composable modules
-growth run <strategy> --dry-run      # Preview without executing
-growth run <strategy> --json         # Machine-readable output
-growth traction                      # Check engagement on posted content
+gtm run --list                    # See all strategies + their execution mode
+gtm modules list                  # Browse composable modules
+gtm run <strategy> --dry-run      # Preview without executing
+gtm run <strategy> --json         # Machine-readable output
+gtm traction                      # Check engagement on posted content
 ```

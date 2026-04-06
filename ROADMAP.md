@@ -1,4 +1,4 @@
-# growth-cli Roadmap
+# gtm-cli Roadmap
 
 > Single source of truth for all phases, milestones, and status.
 
@@ -60,39 +60,39 @@
 
 ### 🎬 v0.1 Showcase: "Everything from your terminal"
 
-**Before growth-cli:** You open Twitter in one tab, Reddit in another, HN in a third. You copy-paste your announcement across all three, manually adjusting tone. You check back every hour across 3 tabs to see engagement. You forget which account you're posting from.
+**Before gtm-cli:** You open Twitter in one tab, Reddit in another, HN in a third. You copy-paste your announcement across all three, manually adjusting tone. You check back every hour across 3 tabs to see engagement. You forget which account you're posting from.
 
-**After growth-cli:**
+**After gtm-cli:**
 
 ```bash
 # Connect accounts once (30 seconds)
-$ growth auth twitter     # paste Cookie-Editor export
-$ growth auth reddit
-$ growth auth hn
+$ gtm auth twitter     # paste Cookie-Editor export
+$ gtm auth reddit
+$ gtm auth hn
 
 # Search all platforms from one terminal
-$ growth twitter user karpathy --count 3
+$ gtm twitter user karpathy --count 3
   @karpathy — latest 3 tweets:
   LLM Knowledge Bases...                    ❤️ 11,025  🔁 1,124
   New supply chain attack for npm axios...  ❤️ 10,444  🔁 1,121
 
-$ growth hn top --count 3
+$ gtm hn top --count 3
   1. [1586] LinkedIn is searching your browser extensions
   2. [1207] Google releases Gemma 4 open models
 
-$ growth reddit search "AI agents" --sub SaaS --count 2
+$ gtm reddit search "AI agents" --sub SaaS --count 2
   [267] Salesforce cut support staff by 4,000 using AI agents
   [12]  Has anyone actually automated sales with AI agents?
 
 # Post across platforms (rate-limited, safe)
-$ growth twitter post "Just shipped v2!" --dry-run    # preview first
-$ growth reddit submit --sub SaaS --title "..." --dry-run
+$ gtm twitter post "Just shipped v2!" --dry-run    # preview first
+$ gtm reddit submit --sub SaaS --title "..." --dry-run
 
 # Check engagement across ALL platforms in one command
-$ growth traction
+$ gtm traction
   🐦 twitter  "Just shipped v2!"         ❤️ 142  🔁 23  👁 8,401
-  🤖 reddit   "Show r/SaaS: growth-cli"  ⬆️ 38   💬 7   📊 0.92
-  🟠 hn       "Show HN: growth-cli"      ▲ 23    💬 4
+  🤖 reddit   "Show r/SaaS: gtm-cli"  ⬆️ 38   💬 7   📊 0.92
+  🟠 hn       "Show HN: gtm-cli"      ▲ 23    💬 4
 ```
 
 **The key insight:** You never leave the terminal. No UI switching. No copy-pasting. Rate limits protect your accounts automatically.
@@ -115,8 +115,8 @@ $ growth traction
 - [x] 4 filter modules (engagement, keyword, deduplicate, limit) — `4dfbfd7`
 - [x] 5 action modules (twitter/post, twitter/like, twitter/retweet, reddit/submit, hn/submit) — `4dfbfd7`
 - [x] 1 monitor module (track/engagement) — `4dfbfd7`
-- [x] `growth modules list` CLI command — `4dfbfd7`
-- [x] `growth modules info <name>` CLI command — `4dfbfd7`
+- [x] `gtm modules list` CLI command — `4dfbfd7`
+- [x] `gtm modules info <name>` CLI command — `4dfbfd7`
 
 </details>
 
@@ -127,7 +127,7 @@ $ growth traction
 **After:**
 
 ```bash
-$ growth modules list
+$ gtm modules list
   SOURCES (Eyes)     — 5 modules
     twitter/search          Search tweets by query 🔑
     hn/top_stories          Get current HN front page stories
@@ -146,7 +146,7 @@ $ growth modules list
 
   23 modules total
 
-$ growth modules info filter/engagement
+$ gtm modules info filter/engagement
   Name: filter/engagement
   Category: filter
   Description: Keep items above engagement thresholds
@@ -231,7 +231,7 @@ modules:
 **After:**
 
 ```bash
-$ growth run cross-platform-scout -p query="growth hacking" -p count=3
+$ gtm run cross-platform-scout -p query="growth hacking" -p count=3
 
   Running strategy: Cross-Platform Scout (Parallel)
 
@@ -271,7 +271,7 @@ modules:
 ### Phase 4: Strategy-as-Module ✅ DONE
 
 - [x] Reference a strategy as a module — `b1a8e52` in another strategy
-- [x] `growth modules create` scaffold tool — `b1a8e52`
+- [x] `gtm modules create` scaffold tool — `b1a8e52`
 - [x] Strategy composability test (nested 3 levels) — `f57fe3b`
 
 #### 🎬 Phase 4 Showcase: "Strategies compose into bigger strategies"
@@ -283,11 +283,11 @@ name: "Full Launch Campaign"
 modules:
   hn_launch:
     use: strategy/show-hn-launch           # ← a whole strategy as one module
-    params: { topic: "growth-cli" }
+    params: { topic: "gtm-cli" }
 
   reddit_launch:
     use: strategy/reddit-organic-seed      # ← another strategy as a module
-    params: { topic: "growth-cli", subreddits: [SaaS, startups] }
+    params: { topic: "gtm-cli", subreddits: [SaaS, startups] }
 
   # HN + Reddit run in PARALLEL (separate platforms)
 
@@ -325,7 +325,7 @@ modules:
   announce:
     use: twitter/post
     as: $brand
-    params: { text: "Just shipped growth-cli v1.0 🚀" }
+    params: { text: "Just shipped gtm-cli v1.0 🚀" }
 
   amplify:
     use: control/for_each
@@ -342,7 +342,7 @@ modules:
 ```
 
 ```bash
-$ growth status
+$ gtm status
   PLATFORM  IDENTITY           ROLE       PROXY         STATUS
   twitter   @brand_main        brand      us-west-1     ✅ OK
   twitter   @organic_sarah     supporter  us-east-2     ✅ OK
@@ -357,7 +357,7 @@ $ growth status
 
 ## v0.3 — "Intelligence" ⬜
 
-- [ ] Chat TUI mode (`growth chat`)
+- [ ] Chat TUI mode (`gtm chat`)
 - [ ] NL → strategy planning
 - [ ] Content generation (`--generate` flag)
 - [ ] Platform-native tone adaptation
@@ -369,7 +369,7 @@ $ growth status
 #### 🎬 v0.3 Showcase: "Talk to your growth engine"
 
 ```bash
-$ growth chat
+$ gtm chat
 You: launch my new feature on HN, Twitter, and Reddit.
      product is "GrowthCLI", url is growthcli.dev
      use organic tone on reddit
@@ -395,16 +395,16 @@ Execute? [y/edit/n]
 ## v0.4 — "Growth Cloud" ⬜
 
 - [ ] Supabase backend
-- [ ] `growth cloud shop`
-- [ ] `growth cloud buy`
-- [ ] `growth cloud redeem`
+- [ ] `gtm cloud shop`
+- [ ] `gtm cloud buy`
+- [ ] `gtm cloud redeem`
 - [ ] Account tiers
 - [ ] One-time purchase
 
 #### 🎬 v0.4 Showcase: "Buy accounts, plug them in, go"
 
 ```bash
-$ growth cloud shop
+$ gtm cloud shop
   TWITTER
   ├── Warmed (1-3 months)        $35
   └── Aged (6+ months, 500+ followers)  $65
@@ -413,11 +413,11 @@ $ growth cloud shop
   ├── Warmed (100+ karma)        $30
   └── Aged (1000+ karma)         $55
 
-$ growth cloud buy twitter-warmed --count 3
+$ gtm cloud buy twitter-warmed --count 3
   → Payment: https://growth.cloud/checkout/xxx
-  → After payment: growth cloud redeem <code>
+  → After payment: gtm cloud redeem <code>
 
-$ growth cloud redeem abc123
+$ gtm cloud redeem abc123
   → Downloaded 3 identities
   → twitter:gc_organic_1, twitter:gc_organic_2, twitter:gc_organic_3
   → All configured with dedicated proxies
@@ -462,15 +462,15 @@ $ growth draft "Announce our Series A"
 - [ ] Documentation polish
 - [ ] Video demo / walkthrough
 - [ ] Landing page + pricing
-- [ ] Launch campaign (dogfooding growth-cli)
+- [ ] Launch campaign (dogfooding gtm-cli)
 - [ ] Apache 2.0 license ✅ (done early)
 
-#### 🎬 v1.0 Showcase: "Launching growth-cli using growth-cli"
+#### 🎬 v1.0 Showcase: "Launching gtm-cli using gtm-cli"
 
 ```bash
-$ growth run launch-campaign -p product="growth-cli" -p url="github.com/serenakeyitan/growth-cli"
+$ gtm run launch-campaign -p product="gtm-cli" -p url="github.com/serenakeyitan/gtm-cli"
 
-  ✅ hn_submit: Show HN: growth-cli — Terminal-native growth automation
+  ✅ hn_submit: Show HN: gtm-cli — Terminal-native growth automation
   ✅ twitter_thread: 5-tweet thread posted
   ✅ reddit_saas: Posted to r/SaaS (organic tone)
   ✅ reddit_startups: Posted to r/startups (30min stagger)
@@ -505,7 +505,7 @@ $ growth marketplace search "product-hunt-launch"
 $ growth marketplace install ph-blitz
   → Strategy saved to ~/.config/growth/strategies/ph-blitz.yaml
 
-$ growth run ph-blitz -p product="my-saas"
+$ gtm run ph-blitz -p product="my-saas"
 ```
 
 ---

@@ -5,14 +5,14 @@ from unittest.mock import patch
 
 import pytest
 
-from growth.safety.rate_limiter import RateLimiter, RATE_LIMITS
+from gtm.safety.rate_limiter import RateLimiter, RATE_LIMITS
 
 
 @pytest.fixture
 def limiter(tmp_path):
     """Create a rate limiter with temp state directory."""
-    with patch("growth.safety.rate_limiter.RATE_LIMITS_DIR", tmp_path):
-        with patch("growth.safety.rate_limiter.STATE_FILE", tmp_path / "state.json"):
+    with patch("gtm.safety.rate_limiter.RATE_LIMITS_DIR", tmp_path):
+        with patch("gtm.safety.rate_limiter.STATE_FILE", tmp_path / "state.json"):
             yield RateLimiter()
 
 

@@ -1,21 +1,21 @@
-# growth-cli
+# gtm-cli
 
 > Claude Code gave developers a terminal for everything.  
-> **growth-cli gives marketers the same.**
+> **gtm-cli gives marketers the same.**
 
 One terminal. Every platform. No more switching between Twitter, Reddit, and HN dashboards.
 
 ```bash
-$ growth twitter user karpathy --count 3
+$ gtm twitter user karpathy --count 3
   @karpathy — latest 3 tweets:
   LLM Knowledge Bases...                    ❤️ 11,025  🔁 1,124
   New supply chain attack for npm axios...  ❤️ 10,444  🔁 1,121
 
-$ growth hn top --count 3
+$ gtm hn top --count 3
   1. [1586] LinkedIn is searching your browser extensions
   2. [1207] Google releases Gemma 4 open models
 
-$ growth run combined-routes -p query="AI open source" -p min_likes=10
+$ gtm run combined-routes -p query="AI open source" -p min_likes=10
   ✅ scout          twitter/search (16 items)
   ✅ filter_hot     filter/engagement (8 items)
   ✅ r1_keywords    filter/keyword (5 items)       ─┐ Route 1 → Reddit
@@ -30,16 +30,16 @@ $ growth run combined-routes -p query="AI open source" -p min_likes=10
 
 ```bash
 pip install -e .
-growth init
-growth auth twitter    # paste Cookie-Editor export
-growth auth reddit
-growth auth hn
+gtm init
+gtm auth twitter    # paste Cookie-Editor export
+gtm auth reddit
+gtm auth hn
 ```
 
 ### Inside Claude Code
 
 ```
-Install growth-cli: run `pip install -e /path/to/growth-cli && growth init`
+Install gtm-cli: run `pip install -e /path/to/gtm-cli && gtm init`
 then help me connect my social media accounts.
 ```
 
@@ -48,7 +48,7 @@ then help me connect my social media accounts.
 Every piece is a Lego block. Compose them into any strategy.
 
 ```bash
-$ growth modules list
+$ gtm modules list
   SOURCES (5)     twitter/search, twitter/user_tweets, reddit/search, hn/search, hn/top_stories
   FILTERS (4)     filter/engagement, filter/keyword, filter/deduplicate, filter/limit
   TRANSFORMS (4)  transform/rewrite, transform/extract_url, transform/platform_adapt, transform/summarize
@@ -104,28 +104,28 @@ modules:
 
 ```bash
 # Search
-growth twitter search "AI agents" --count 10
-growth twitter user karpathy --count 5
-growth reddit search "launch strategy" --sub startups
-growth hn search "Show HN"
-growth hn top --count 15
+gtm twitter search "AI agents" --count 10
+gtm twitter user karpathy --count 5
+gtm reddit search "launch strategy" --sub startups
+gtm hn search "Show HN"
+gtm hn top --count 15
 
 # Post (rate-limited, safe)
-growth twitter post "Just shipped v2! 🚀" --dry-run
-growth reddit submit --sub SaaS --title "..." --body "..." --dry-run
-growth hn submit --title "Show HN: ..." --url "..." --dry-run
+gtm twitter post "Just shipped v2! 🚀" --dry-run
+gtm reddit submit --sub SaaS --title "..." --body "..." --dry-run
+gtm hn submit --title "Show HN: ..." --url "..." --dry-run
 
 # Strategies
-growth run --list                          # see all + execution mode
-growth run combined-routes -p query="AI"   # run a strategy
-growth run cross-platform-scout --dry-run  # preview
-growth modules create my-strategy          # scaffold new YAML
+gtm run --list                          # see all + execution mode
+gtm run combined-routes -p query="AI"   # run a strategy
+gtm run cross-platform-scout --dry-run  # preview
+gtm modules create my-strategy          # scaffold new YAML
 
 # Track
-growth traction                            # live engagement metrics
-growth traction --json                     # for agent analysis
-growth status                              # connected accounts
-growth log                                 # recent activity
+gtm traction                            # live engagement metrics
+gtm traction --json                     # for agent analysis
+gtm status                              # connected accounts
+gtm log                                 # recent activity
 ```
 
 ## Architecture: Direct API First, LLM Last

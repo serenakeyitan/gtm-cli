@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "growth-cli"
+name = "gtm-cli"
 version = "0.1.0"
-description = "Terminal-native marketing automation. Claude Code for marketers."
+description = "Terminal-native go-to-market CLI. Claude Code for marketers."
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
     {name = "Serena Key", email = "serena@unispark.dev"},
 ]
-keywords = ["marketing", "automation", "cli", "growth", "social-media"]
+keywords = ["gtm", "go-to-market", "marketing", "automation", "cli", "social-media"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -43,14 +43,14 @@ agents = [
 ]
 
 [project.scripts]
-growth = "growth.cli:main"
+gtm = "gtm.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/serenakeyitan/growth-cli"
-Repository = "https://github.com/serenakeyitan/growth-cli"
+Homepage = "https://github.com/serenakeyitan/gtm-cli"
+Repository = "https://github.com/serenakeyitan/gtm-cli"
 
 [tool.setuptools.packages.find]
-include = ["growth*"]
+include = ["gtm*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
