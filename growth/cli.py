@@ -935,9 +935,9 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         alt = handle_account_failure(identity, mgr, platform, result.error or "Unknown error",
                                      interactive=not json_output)
         if alt:
-            # Check rate limit for alternative account first
+            # Check rate limit for alternative account
             rl_alt = limiter.check(alt.name, platform, action)
-            if not rl_alt.allowed:
+            if not rl_alt.allowed and not force:
                 console.print(f"  [yellow]Alternative account also rate-limited: {rl_alt.reason}[/yellow]")
                 sys.exit(1)
 
