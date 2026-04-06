@@ -189,7 +189,7 @@ def auth(platform, username, email, use_stdin):
             # Agent flow: expect cookie JSON on stdin
             import sys as _sys
             raw = _sys.stdin.read().strip()
-            _auth_cookie_paste(platform, username, identity_dir, raw)
+            _auth_cookie_paste(platform, username, identity_dir, raw, interactive=False)
             return
 
         console.print(f"\n  Connecting {platform_name} account [bold]{username}[/bold]")
@@ -935,10 +935,20 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         alt = handle_account_failure(identity, mgr, platform, result.error or "Unknown error",
                                      interactive=not json_output)
         if alt:
-            # Retry with the alternative account
+            # Check rate limit for alternative account first
+            rl_alt = limiter.check(alt.name, platform, action)
+            if not rl_alt.allowed:
+                console.print(f"  [yellow]Alternative account also rate-limited: {rl_alt.reason}[/yellow]")
+                sys.exit(1)
+
             console.print(f"  Retrying with [bold]{alt.name}[/bold]...")
             result = await plat.post(alt.identity_dir, text, **kwargs)
             if result.success:
+                # Record rate limit + update identity metadata
+                limiter.record(alt.name, action)
+                alt.last_used = __import__("datetime").datetime.now().isoformat()
+                alt.save()
+
                 from growth.output.logger import log_post
                 log_post(platform, alt.name, text, {"post_id": result.post_id, "url": result.url}, **kwargs)
                 console.print(f"[green]✅ Posted![/green]")
@@ -955,6 +965,7 @@ async def _do_user_tweets(platform: str, username: str, as_identity, count: int,
     """Fetch recent tweets from a specific user."""
     from growth.identity.manager import IdentityManager
     from growth.identity.selector import select_account
+    from growth.platforms.twitter.client import TwitterClient
 
     mgr = IdentityManager()
     identity = select_account(mgr, platform, as_flag=as_identity, interactive=not json_output)
@@ -1339,7 +1350,7 @@ def _auth_platform_cookie_paste(platform: str, platform_name: str, username: str
     _auth_cookie_paste(platform, username, identity_dir, raw)
 
 
-def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: str) -> None:
+def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: str, interactive: bool = True) -> None:
     """Parse and save cookies for Reddit or HN."""
     import os
     import stat
@@ -1400,7 +1411,12 @@ def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: st
             _json.dump({"user_cookie": cookie_dict["user"]}, f, indent=2)
         os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)
 
-    _prompt_and_save_identity(platform, username, {"auth_method": "cookies_manual"})
+    if interactive:
+        _prompt_and_save_identity(platform, username, {"auth_method": "cookies_manual"})
+    else:
+        _save_identity(platform, username, {"auth_method": "cookies_manual"}, role="default")
+        console.print(f"\n  [green]✅ Cookies saved![/green]")
+        console.print(f"     Identity: [bold]{platform}:{username}[/bold]")
 
     if platform == "reddit":
         console.print(f"\n     Test it: [bold]growth reddit search 'test' --count 1[/bold]")
