@@ -197,9 +197,12 @@ class RateLimiter:
         return {}
 
     def _save_state(self) -> None:
-        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(STATE_FILE, "w") as f:
-            json.dump(self._state, f)
+        try:
+            STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(STATE_FILE, "w") as f:
+                json.dump(self._state, f)
+        except OSError as e:
+            log.warning("Could not persist rate limit state: %s", e)
 
 
 # ── Module-level singleton ────────────────────────────────────────────
