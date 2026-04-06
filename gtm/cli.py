@@ -259,7 +259,17 @@ def status():
             "default": "[dim]default[/dim]",
         }.get(identity.role, identity.role)
 
-        proxy_str = identity.proxy[:30] + "..." if identity.proxy and len(identity.proxy) > 30 else (identity.proxy or "direct")
+        # Redact proxy credentials (user:pass@host → ***@host)
+        proxy_raw = identity.proxy or "direct"
+        if "@" in proxy_raw:
+            proto_rest = proxy_raw.split("://", 1)
+            if len(proto_rest) == 2:
+                host_part = proto_rest[1].split("@", 1)[-1]
+                proxy_str = f"{proto_rest[0]}://***@{host_part}"
+            else:
+                proxy_str = "***@" + proxy_raw.split("@", 1)[-1]
+        else:
+            proxy_str = proxy_raw
 
         table.add_row(
             identity.platform,
@@ -870,8 +880,11 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
     plat = get_platform(platform)
     limiter = get_rate_limiter()
 
-    # Rate limit check
-    rl = limiter.check(identity.name, platform, action)
+    # 5-layer rate limit check (coordinator wraps per-account limiter)
+    from gtm.safety.coordinator import get_coordinator
+    coordinator = get_coordinator()
+    rl = coordinator.check(identity.name, platform, action, proxy=identity.proxy,
+                           target_url=kwargs.get("url", ""))
     if not rl.allowed and not force:
         if json_output:
             click.echo(json.dumps({"success": False, "error": "rate_limited", "wait_seconds": rl.wait_seconds}))
@@ -906,7 +919,7 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
     result = await plat.post(identity.identity_dir, text, **kwargs)
 
     if result.success:
-        limiter.record(identity.name, action)
+        coordinator.record(identity.name, platform, action, target_url=kwargs.get("url", ""))
         identity.last_used = __import__("datetime").datetime.now().isoformat()
         identity.save()
 

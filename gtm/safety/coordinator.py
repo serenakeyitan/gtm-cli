@@ -58,12 +58,40 @@ class RateLimitCoordinator:
     """5-layer rate limit coordinator.
 
     Every action goes through all 5 layers. ALL must pass.
+    State persists to disk so limits survive across CLI invocations.
     """
 
     def __init__(self):
         self._account_limiter = get_rate_limiter()
-        self._global_actions: dict[str, list[float]] = {}  # "twitter:post" → [timestamps]
-        self._cross_platform_urls: dict[str, float] = {}   # "url" → last_posted_timestamp
+        self._state = self._load_state()
+
+    @property
+    def _global_actions(self) -> dict[str, list[float]]:
+        return self._state.setdefault("global_actions", {})
+
+    @property
+    def _cross_platform_urls(self) -> dict[str, float]:
+        return self._state.setdefault("cross_platform_urls", {})
+
+    def _load_state(self) -> dict:
+        import json
+        from gtm.config import RATE_LIMITS_DIR
+        path = RATE_LIMITS_DIR / "coordinator_state.json"
+        if path.exists():
+            try:
+                with open(path) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {"global_actions": {}, "cross_platform_urls": {}}
+
+    def _save_state(self) -> None:
+        import json
+        from gtm.config import RATE_LIMITS_DIR
+        RATE_LIMITS_DIR.mkdir(parents=True, exist_ok=True)
+        path = RATE_LIMITS_DIR / "coordinator_state.json"
+        with open(path, "w") as f:
+            json.dump(self._state, f)
 
     def check(
         self,
@@ -114,7 +142,7 @@ class RateLimitCoordinator:
         )
 
     def record(self, identity_name: str, platform: str, action: str, target_url: str = "") -> None:
-        """Record an action across all layers."""
+        """Record an action across all layers. Persists to disk."""
         self._account_limiter.record(identity_name, action)
 
         # Layer 3: global
@@ -127,10 +155,14 @@ class RateLimitCoordinator:
         if target_url:
             self._cross_platform_urls[target_url] = time.time()
 
+        self._save_state()
+
     def _check_ip_limit(self, proxy: str, platform: str, action: str) -> CoordinatorResult:
-        """Layer 2: Don't have too many accounts active on the same IP."""
-        # For now, just enforce a minimum gap between actions from same proxy
-        # Full implementation would track per-proxy action timestamps
+        """Layer 2: Don't have too many accounts active on the same IP.
+
+        TODO: Track per-proxy action timestamps. For now, passes through
+        (per-account limits in Layer 1 provide baseline protection).
+        """
         return CoordinatorResult(allowed=True)
 
     def _check_platform_global(self, platform: str, action: str) -> CoordinatorResult:
