@@ -654,6 +654,57 @@ def modules_info(name):
     console.print()
 
 
+# ── Listen (Social Listening) ─────────────────────────────────────────
+
+
+@main.command("listen")
+@click.argument("query")
+@click.option("--platforms", "-p", default="twitter,reddit,hn", help="Platforms to scan (comma-separated)")
+@click.option("--count", default=5, help="Results per platform")
+@click.option("--json", "json_output", is_flag=True)
+def listen_cmd(query, platforms, count, json_output):
+    """Monitor platforms for a topic — find mentions, trends, opportunities."""
+    _ensure_platforms_registered()
+    from gtm.output.listener import listen
+    from gtm.identity.manager import IdentityManager
+    from gtm.config import IDENTITIES_DIR
+
+    platform_list = [p.strip() for p in platforms.split(",")]
+
+    # Resolve identity dirs for auth-required platforms
+    mgr = IdentityManager()
+    identity_dirs = {}
+    for p in platform_list:
+        try:
+            identity = mgr.get_for_platform(p)
+            identity_dirs[p] = identity.identity_dir
+        except ValueError:
+            pass  # No auth for this platform — search may still work (Reddit, HN)
+
+    results = asyncio.run(listen(query, platform_list, count, identity_dirs))
+
+    if json_output:
+        click.echo(json.dumps(results, indent=2, default=str))
+        return
+
+    total = sum(len(v) for v in results.values())
+    console.print(f"\n  [bold]Listening for '{query}' — {total} results across {len(platform_list)} platforms:[/bold]\n")
+
+    icons = {"twitter": "🐦", "reddit": "🤖", "hn": "🟠"}
+
+    for platform, items in results.items():
+        icon = icons.get(platform, "📝")
+        console.print(f"  {icon} [bold]{platform}[/bold] ({len(items)} results)")
+        for item in items[:count]:
+            title = item.get("title", item.get("text", ""))[:80]
+            score = item.get("favorite_count", item.get("score", item.get("points", 0)))
+            author = item.get("author", item.get("user", {}).get("screen_name", "")) if isinstance(item.get("user"), dict) else item.get("author", "")
+            console.print(f"    [{score}] {title}")
+            if author:
+                console.print(f"         [dim]by {author}[/dim]")
+        console.print()
+
+
 # ── Traction ──────────────────────────────────────────────────────────
 
 
@@ -673,8 +724,20 @@ def traction_cmd(refresh, json_output):
 
     if not results:
         console.print("No posts tracked yet.")
-        console.print("Posts appear here after you use [bold]growth <platform> post[/bold]")
+        console.print("Posts appear here after you use [bold]gtm <platform> post[/bold]")
         return
+
+    # Check for alerts
+    if refresh:
+        from gtm.output.alerts import check_alerts
+        alerts = check_alerts(results)
+        if alerts and not json_output:
+            console.print(f"\n  [bold yellow]🔔 {len(alerts)} new alert(s)![/bold yellow]\n")
+            for a in alerts:
+                icon = {"twitter": "🐦", "reddit": "🤖", "hn": "🟠"}.get(a["platform"], "📝")
+                console.print(f"  {icon} [bold]{a['metric']}[/bold] hit {a['threshold']}! (now {a['current']})")
+                console.print(f"     {a['content']}")
+                console.print()
 
     if json_output:
         click.echo(json.dumps(results, indent=2))
@@ -729,13 +792,27 @@ def twitter():
 
 
 @twitter.command("post")
-@click.argument("text")
+@click.argument("text", required=False, default="")
 @click.option("--as", "as_identity", help="Identity to use (e.g., twitter:handle)")
+@click.option("--generate", "-g", "generate_prompt", default="", help="Generate content from a description")
 @click.option("--dry-run", is_flag=True, help="Preview without posting")
 @click.option("--force", is_flag=True, help="Override rate limits (risky!)")
 @click.option("--json", "json_output", is_flag=True, help="JSON output")
-def twitter_post(text, as_identity, dry_run, force, json_output):
-    """Post a tweet."""
+def twitter_post(text, as_identity, generate_prompt, dry_run, force, json_output):
+    """Post a tweet. Use --generate to have LLM draft the content."""
+    if generate_prompt:
+        text = _generate_content("twitter", generate_prompt)
+        if not text:
+            sys.exit(1)
+        if not dry_run and not json_output:
+            console.print(f"\n  [bold]Generated tweet:[/bold]")
+            console.print(f"  {text}\n")
+            if not click.confirm("  Post this?", default=True):
+                console.print("  Cancelled.")
+                return
+    elif not text:
+        console.print("[red]Provide text or use --generate[/red]")
+        sys.exit(1)
     asyncio.run(_do_post("twitter", "post", text, as_identity, dry_run, force, json_output))
 
 
@@ -812,13 +889,32 @@ def reddit_search(query, sub, count, json_output):
 @reddit.command("submit")
 @click.option("--as", "as_identity", help="Identity to use")
 @click.option("--sub", required=True, help="Subreddit to post in")
-@click.option("--title", required=True, help="Post title")
+@click.option("--title", default="", help="Post title")
 @click.option("--body", default="", help="Post body text")
 @click.option("--url", default="", help="Link URL (for link posts)")
+@click.option("--generate", "-g", "generate_prompt", default="", help="Generate title + body from description")
 @click.option("--dry-run", is_flag=True)
 @click.option("--force", is_flag=True)
-def reddit_submit(as_identity, sub, title, body, url, dry_run, force):
-    """Submit a post to a subreddit."""
+def reddit_submit(as_identity, sub, title, body, url, generate_prompt, dry_run, force):
+    """Submit a post to a subreddit. Use --generate to draft content."""
+    if generate_prompt:
+        generated = _generate_content("reddit", generate_prompt, subreddit=sub)
+        if not generated:
+            sys.exit(1)
+        # Parse title and body from generated content
+        lines = generated.strip().split("\n", 1)
+        title = title or lines[0]
+        body = body or (lines[1].strip() if len(lines) > 1 else "")
+        if not dry_run:
+            console.print(f"\n  [bold]Generated Reddit post for r/{sub}:[/bold]")
+            console.print(f"  Title: {title}")
+            console.print(f"  Body:  {body[:200]}{'...' if len(body) > 200 else ''}\n")
+            if not click.confirm("  Post this?", default=True):
+                console.print("  Cancelled.")
+                return
+    elif not title:
+        console.print("[red]Provide --title or use --generate[/red]")
+        sys.exit(1)
     asyncio.run(_do_post("reddit", "post", body, as_identity, dry_run, force, False,
                           subreddit=sub, title=title, url=url))
 
@@ -1472,6 +1568,52 @@ def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: st
         console.print(f"\n     Test it: [bold]gtm reddit search 'test' --count 1[/bold]")
     else:
         console.print(f"\n     Test it: [bold]gtm hn search 'test' --count 1[/bold]")
+
+
+def _generate_content(platform: str, prompt: str, **kwargs) -> str | None:
+    """Generate platform-native content using LLM.
+
+    Uses the style guide for platform-specific tone.
+    Returns generated text or None on failure.
+    """
+    from gtm.agents.base import load_style_guide
+
+    style = load_style_guide(platform)
+    subreddit = kwargs.get("subreddit", "")
+
+    platform_instructions = {
+        "twitter": "Write a tweet (max 280 chars). Include relevant hashtags.",
+        "reddit": f"Write a Reddit post title (first line) and body (rest) for r/{subreddit}. Follow the style guide exactly — all lowercase, no self-promotion.",
+        "hn": "Write a Hacker News submission title. Clean, factual, no clickbait.",
+    }
+
+    full_prompt = (
+        f"## Task\n{platform_instructions.get(platform, 'Write a social media post.')}\n\n"
+        f"## User's Description\n{prompt}\n\n"
+        f"## Style Rules\n{style}\n\n"
+        f"## Output\nOutput ONLY the final text. Nothing else."
+    )
+
+    try:
+        import subprocess
+        # Use Claude Code CLI directly (avoids async conflicts with Click)
+        proc = subprocess.run(
+            ["claude", "-p", full_prompt, "--output-format", "text"],
+            capture_output=True, text=True, timeout=60,
+        )
+        result = proc.stdout.strip() if proc.returncode == 0 else None
+        if result:
+            return result
+        console.print("[yellow]LLM returned empty response.[/yellow]")
+        return None
+
+    except ImportError:
+        console.print("[yellow]Content generation requires claude-code-sdk.[/yellow]")
+        console.print("Install: [bold]pip install gtm-cli[agents][/bold]")
+        return None
+    except Exception as e:
+        console.print(f"[yellow]Content generation failed: {e}[/yellow]")
+        return None
 
 
 def _handle_auth_error(error: Exception, platform: str) -> None:
