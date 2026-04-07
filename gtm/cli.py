@@ -1596,12 +1596,25 @@ def _generate_content(platform: str, prompt: str, **kwargs) -> str | None:
 
     try:
         import subprocess
-        # Use Claude Code CLI directly (avoids async conflicts with Click)
-        proc = subprocess.run(
-            ["claude", "-p", full_prompt, "--output-format", "text"],
-            capture_output=True, text=True, timeout=60,
-        )
-        result = proc.stdout.strip() if proc.returncode == 0 else None
+        import tempfile
+        # Write prompt to temp file (avoid exposing content via process args)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
+            tmp.write(full_prompt)
+            tmp_path = tmp.name
+
+        try:
+            proc = subprocess.run(
+                ["claude", "-p", f"$(cat {tmp_path})", "--output-format", "text"],
+                capture_output=True, text=True, timeout=60, shell=True,
+            )
+            if proc.returncode != 0:
+                err = proc.stderr.strip()[:200] if proc.stderr else "unknown error"
+                console.print(f"[yellow]Content generation failed: {err}[/yellow]")
+                return None
+            result = proc.stdout.strip() or None
+        finally:
+            import os
+            os.unlink(tmp_path)
         if result:
             return result
         console.print("[yellow]LLM returned empty response.[/yellow]")

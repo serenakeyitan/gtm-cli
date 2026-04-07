@@ -49,6 +49,8 @@ async def listen(
                 mod = registry.get("hn/search")
                 r = await mod.run(None, {"query": query, "count": count}, ModuleContext())
             else:
+                log.warning("Unknown platform: %s (valid: twitter, reddit, hn)", platform)
+                results[platform] = []
                 continue
 
             results[platform] = r.data if r.success else []
