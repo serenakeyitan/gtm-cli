@@ -324,20 +324,34 @@ def rewrite_cmd(text, target_platform, json_output):
     )
 
     import subprocess
-    proc = subprocess.run(
-        ["claude", "-p", "-", "--output-format", "text"],
-        input=prompt, capture_output=True, text=True, timeout=60,
-    )
+    try:
+        proc = subprocess.run(
+            ["claude", "-p", "-", "--output-format", "text"],
+            input=prompt, capture_output=True, text=True, timeout=60,
+        )
+    except FileNotFoundError:
+        if json_output:
+            click.echo(json.dumps({"error": "claude CLI not found", "fallback": True}))
+            sys.exit(1)
+        console.print("[yellow]Claude CLI not found. Using deterministic adaptation...[/yellow]")
+        asyncio.run(_fallback_rewrite(text, target_platform))
+        return
+    except subprocess.TimeoutExpired:
+        if json_output:
+            click.echo(json.dumps({"error": "timeout", "fallback": True}))
+            sys.exit(1)
+        console.print("[yellow]Rewrite timed out. Using deterministic adaptation...[/yellow]")
+        asyncio.run(_fallback_rewrite(text, target_platform))
+        return
 
     if proc.returncode != 0:
         err = proc.stderr.strip()[:200] if proc.stderr else "unknown error"
         if json_output:
-            click.echo(json.dumps({"error": err}))
-        else:
-            console.print(f"[yellow]Rewrite failed: {err}[/yellow]")
-            # Fallback: deterministic adaptation
-            console.print(f"\n  [dim]Falling back to deterministic adaptation...[/dim]")
-            asyncio.run(_fallback_rewrite(text, target_platform))
+            click.echo(json.dumps({"error": err, "fallback": True}))
+            sys.exit(1)
+        console.print(f"[yellow]Rewrite failed: {err}[/yellow]")
+        console.print(f"\n  [dim]Falling back to deterministic adaptation...[/dim]")
+        asyncio.run(_fallback_rewrite(text, target_platform))
         return
 
     rewritten = proc.stdout.strip()
@@ -360,7 +374,9 @@ async def _fallback_rewrite(text: str, platform: str) -> None:
         ModuleContext(),
     )
     if result.data:
-        adapted = result.data[0].get("title", result.data[0].get("text", text))
+        item = result.data[0]
+        # Prefer text (adapted content) over title (may be original)
+        adapted = item.get("text") or item.get("title") or text
         console.print(f"\n  [bold]Adapted:[/bold] {adapted}\n")
 
 
@@ -779,10 +795,23 @@ def plan_cmd(description, save, json_output):
     )
 
     import subprocess
-    proc = subprocess.run(
-        ["claude", "-p", "-", "--output-format", "text"],
-        input=prompt, capture_output=True, text=True, timeout=120,
-    )
+    try:
+        proc = subprocess.run(
+            ["claude", "-p", "-", "--output-format", "text"],
+            input=prompt, capture_output=True, text=True, timeout=120,
+        )
+    except FileNotFoundError:
+        if json_output:
+            click.echo(json.dumps({"error": "claude CLI not found"}))
+        else:
+            console.print("[red]Claude CLI not found. Install: npm install -g @anthropic-ai/claude-code[/red]")
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        if json_output:
+            click.echo(json.dumps({"error": "timeout"}))
+        else:
+            console.print("[yellow]Strategy generation timed out.[/yellow]")
+        sys.exit(1)
 
     if proc.returncode != 0:
         err = proc.stderr.strip()[:200] if proc.stderr else "unknown error"
