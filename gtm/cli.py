@@ -293,6 +293,77 @@ def status():
                     console.print(f"  {action}: {s['this_hour']} this hour, cooldown {s['cooldown']}")
 
 
+# ── Rewrite (Platform Tone Adaptation) ────────────────────────────────
+
+
+@main.command("rewrite")
+@click.argument("text")
+@click.option("--for", "target_platform", required=True, type=click.Choice(["twitter", "reddit", "hn"]),
+              help="Target platform")
+@click.option("--json", "json_output", is_flag=True)
+def rewrite_cmd(text, target_platform, json_output):
+    """Rewrite content for a platform's tone and style.
+
+    Example: gtm rewrite "We just launched our AI tool!" --for reddit
+    """
+    from gtm.agents.base import load_style_guide
+
+    style = load_style_guide(target_platform)
+
+    platform_instructions = {
+        "twitter": "Rewrite as a tweet (max 280 chars). Include hashtags if relevant.",
+        "reddit": "Rewrite as a Reddit post title (line 1) and body (rest). All lowercase, organic tone, no self-promotion.",
+        "hn": "Rewrite as a Hacker News title. Clean, factual, no clickbait, no editorializing.",
+    }
+
+    prompt = (
+        f"{platform_instructions.get(target_platform, 'Rewrite for social media.')}\n\n"
+        f"## Original\n{text}\n\n"
+        f"## Style Rules\n{style}\n\n"
+        f"## Output\nOutput ONLY the rewritten text."
+    )
+
+    import subprocess
+    proc = subprocess.run(
+        ["claude", "-p", "-", "--output-format", "text"],
+        input=prompt, capture_output=True, text=True, timeout=60,
+    )
+
+    if proc.returncode != 0:
+        err = proc.stderr.strip()[:200] if proc.stderr else "unknown error"
+        if json_output:
+            click.echo(json.dumps({"error": err}))
+        else:
+            console.print(f"[yellow]Rewrite failed: {err}[/yellow]")
+            # Fallback: deterministic adaptation
+            console.print(f"\n  [dim]Falling back to deterministic adaptation...[/dim]")
+            asyncio.run(_fallback_rewrite(text, target_platform))
+        return
+
+    rewritten = proc.stdout.strip()
+    if json_output:
+        click.echo(json.dumps({"original": text, "rewritten": rewritten, "platform": target_platform}))
+    else:
+        console.print(f"\n  [bold]Original:[/bold] {text}")
+        console.print(f"  [bold]For {target_platform}:[/bold] {rewritten}\n")
+
+
+async def _fallback_rewrite(text: str, platform: str) -> None:
+    """Deterministic rewrite when LLM is unavailable."""
+    from gtm.modules import registry
+    from gtm.modules.base import ModuleResult, ModuleContext
+
+    adapt = registry.get("transform/platform_adapt")
+    result = await adapt.run(
+        ModuleResult(success=True, data=[{"text": text, "title": text}]),
+        {"platform": platform},
+        ModuleContext(),
+    )
+    if result.data:
+        adapted = result.data[0].get("title", result.data[0].get("text", text))
+        console.print(f"\n  [bold]Adapted:[/bold] {adapted}\n")
+
+
 # ── Run (Strategy Execution) ──────────────────────────────────────────
 
 
@@ -652,6 +723,103 @@ def modules_info(name):
             req = " (required)" if v.get("required") else f" (default: {v.get('default', '?')})"
             console.print(f"    {k}: {v.get('type', '?')}{req}")
     console.print()
+
+
+# ── Plan (NL → Strategy) ──────────────────────────────────────────────
+
+
+@main.command("plan")
+@click.argument("description")
+@click.option("--save", "-s", default="", help="Save to strategy file name")
+@click.option("--json", "json_output", is_flag=True)
+def plan_cmd(description, save, json_output):
+    """Generate a strategy YAML from a natural language description.
+
+    Example: gtm plan "scout Twitter for AI tools, filter viral ones, post top 3 to Reddit"
+    """
+    _ensure_platforms_registered()
+    from gtm.modules import registry as mod_registry
+
+    # Build module catalog for the LLM
+    modules_info = []
+    for mod in mod_registry.list_all():
+        modules_info.append(f"  {mod.name} — {mod.description}")
+    modules_catalog = "\n".join(modules_info)
+
+    prompt = (
+        "You are a strategy builder for gtm-cli. Generate a YAML strategy file.\n\n"
+        "## User's Description\n"
+        f"{description}\n\n"
+        "## Available Modules\n"
+        f"{modules_catalog}\n\n"
+        "## YAML Format\n"
+        "```yaml\n"
+        "name: \"Strategy Name\"\n"
+        "description: \"What this does\"\n"
+        "version: \"2.0\"\n"
+        "identities:\n"
+        "  twitter_account: { platform: twitter }\n"
+        "params:\n"
+        "  query: { required: true }\n"
+        "modules:\n"
+        "  step1:\n"
+        "    use: module/name\n"
+        "    params: { key: \"{{ query }}\" }\n"
+        "  step2:\n"
+        "    use: module/name\n"
+        "    input: step1\n"
+        "    params: { ... }\n"
+        "```\n\n"
+        "## Rules\n"
+        "- Use ONLY modules from the catalog above\n"
+        "- Connect modules via 'input' field (creates DAG)\n"
+        "- Use {{ param_name }} for user-provided values\n"
+        "- Prefer direct API modules over agent/* modules\n"
+        "- Output ONLY the YAML. No explanation.\n"
+    )
+
+    import subprocess
+    proc = subprocess.run(
+        ["claude", "-p", "-", "--output-format", "text"],
+        input=prompt, capture_output=True, text=True, timeout=120,
+    )
+
+    if proc.returncode != 0:
+        err = proc.stderr.strip()[:200] if proc.stderr else "unknown error"
+        if json_output:
+            click.echo(json.dumps({"error": err}))
+        else:
+            console.print(f"[yellow]Strategy generation failed: {err}[/yellow]")
+        sys.exit(1)
+
+    yaml_text = proc.stdout.strip()
+
+    # Strip markdown code fences if present
+    if yaml_text.startswith("```"):
+        lines = yaml_text.split("\n")
+        yaml_text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+
+    if json_output:
+        click.echo(json.dumps({"yaml": yaml_text}))
+        return
+
+    console.print(f"\n  [bold]Generated strategy:[/bold]\n")
+    console.print(yaml_text)
+
+    if save:
+        import re
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '-', save)
+        strategies_dir = Path("~/.config/gtm/strategies").expanduser()
+        strategies_dir.mkdir(parents=True, exist_ok=True)
+        filepath = strategies_dir / f"{safe_name}.yaml"
+        try:
+            filepath.write_text(yaml_text)
+            console.print(f"\n  [green]✅ Saved to {filepath}[/green]")
+            console.print(f"  Run: [bold]gtm run {safe_name} --dry-run[/bold]")
+        except OSError as e:
+            console.print(f"[red]Failed to save: {e}[/red]")
+    else:
+        console.print(f"\n  [dim]To save: gtm plan \"{description}\" --save my-strategy[/dim]")
 
 
 # ── Listen (Social Listening) ─────────────────────────────────────────
