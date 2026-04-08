@@ -331,14 +331,14 @@ def rewrite_cmd(text, target_platform, json_output):
         )
     except FileNotFoundError:
         if json_output:
-            click.echo(json.dumps({"error": "claude CLI not found", "fallback": True}))
+            click.echo(json.dumps({"error": "claude CLI not found"}))
             sys.exit(1)
         console.print("[yellow]Claude CLI not found. Using deterministic adaptation...[/yellow]")
         asyncio.run(_fallback_rewrite(text, target_platform))
         return
     except subprocess.TimeoutExpired:
         if json_output:
-            click.echo(json.dumps({"error": "timeout", "fallback": True}))
+            click.echo(json.dumps({"error": "timeout"}))
             sys.exit(1)
         console.print("[yellow]Rewrite timed out. Using deterministic adaptation...[/yellow]")
         asyncio.run(_fallback_rewrite(text, target_platform))
@@ -347,7 +347,7 @@ def rewrite_cmd(text, target_platform, json_output):
     if proc.returncode != 0:
         err = proc.stderr.strip()[:200] if proc.stderr else "unknown error"
         if json_output:
-            click.echo(json.dumps({"error": err, "fallback": True}))
+            click.echo(json.dumps({"error": err}))
             sys.exit(1)
         console.print(f"[yellow]Rewrite failed: {err}[/yellow]")
         console.print(f"\n  [dim]Falling back to deterministic adaptation...[/dim]")
@@ -375,8 +375,11 @@ async def _fallback_rewrite(text: str, platform: str) -> None:
     )
     if result.data:
         item = result.data[0]
-        # Prefer text (adapted content) over title (may be original)
-        adapted = item.get("text") or item.get("title") or text
+        # HN adapter writes to 'title', others to 'text'
+        if platform == "hn":
+            adapted = item.get("title") or item.get("text") or text
+        else:
+            adapted = item.get("text") or item.get("title") or text
         console.print(f"\n  [bold]Adapted:[/bold] {adapted}\n")
 
 
