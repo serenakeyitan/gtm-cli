@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import tool
+from claude_agent_sdk import tool
 
 log = logging.getLogger(__name__)
 

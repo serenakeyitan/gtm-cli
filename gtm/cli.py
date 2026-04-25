@@ -1813,7 +1813,7 @@ def _generate_content(platform: str, prompt: str, **kwargs) -> str | None:
         return None
 
     except ImportError:
-        console.print("[yellow]Content generation requires claude-code-sdk.[/yellow]")
+        console.print("[yellow]Content generation requires claude-agent-sdk.[/yellow]")
         console.print("Install: [bold]pip install gtm-cli[agents][/bold]")
         return None
     except Exception as e:

@@ -56,7 +56,7 @@ class ScoutAgentModule(Module):
             return ModuleResult(success=True, data=ideas if isinstance(ideas, list) else [ideas],
                                 metadata={"ideas_found": len(ideas) if isinstance(ideas, list) else 1})
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed. Run: pip install gtm-cli[agents]"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed. Run: pip install gtm-cli[agents]"])
         except Exception as e:
             return ModuleResult(success=False, errors=[str(e)])
 

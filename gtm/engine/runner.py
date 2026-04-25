@@ -114,14 +114,14 @@ async def run_strategy(
                 state["steps"][step_id] = {"status": "failed", "error": str(e)}
                 state["errors"].append(f"Step {step_id}: {e}")
 
-        # Agent steps — requires claude-code-sdk (pip install gtm-cli[agents])
+        # Agent steps — requires claude-agent-sdk (pip install gtm-cli[agents])
         elif step.type == "agent":
             try:
                 result = await _execute_agent_step(step, resolved_params, step_outputs, mgr)
                 state["steps"][step_id] = {"status": "success", "result": result}
                 step_outputs[step_id] = result
             except ImportError:
-                log.warning("Step [%s]: claude-code-sdk not installed. Run: pip install gtm-cli[agents]", step_id)
+                log.warning("Step [%s]: claude-agent-sdk not installed. Run: pip install gtm-cli[agents]", step_id)
                 state["steps"][step_id] = {"status": "skipped", "reason": "Install agents: pip install gtm-cli[agents]"}
             except Exception as e:
                 log.error("Step [%s] failed: %s", step_id, e)

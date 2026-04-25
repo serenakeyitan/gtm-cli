@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from claude_code_sdk import tool
+from claude_agent_sdk import tool
 import httpx
 
 ALGOLIA_API = "https://hn.algolia.com/api/v1"
