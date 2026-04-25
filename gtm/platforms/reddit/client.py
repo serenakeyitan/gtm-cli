@@ -13,7 +13,6 @@ Follows the same patterns as twikit_client.py:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -892,22 +891,34 @@ class PlaywrightRedditClient:
 
 # ── Module-level singleton ───────────────────────────────────────────
 
-_default_client: PlaywrightRedditClient | None = None
+_clients_by_dir: dict[str, PlaywrightRedditClient] = {}
 
 
 def get_reddit_browser_client(
     session_dir: str | None = None,
 ) -> PlaywrightRedditClient:
-    """Return (or create) the module-level PlaywrightRedditClient singleton."""
-    global _default_client
-    if _default_client is None:
-        if session_dir is None:
-            session_dir = DEFAULT_SESSION_DIR
-        _default_client = PlaywrightRedditClient(session_dir)
-    return _default_client
+    """Return (or create) a PlaywrightRedditClient cached per session_dir.
+
+    Per-identity caching: each unique session_dir gets its own client so
+    multi-account workflows can hold multiple logged-in browsers
+    simultaneously without resetting between calls.
+    """
+    if session_dir is None:
+        session_dir = DEFAULT_SESSION_DIR
+    key = str(session_dir)
+    if key not in _clients_by_dir:
+        _clients_by_dir[key] = PlaywrightRedditClient(session_dir)
+    return _clients_by_dir[key]
+
+
+def get_reddit_browser_client_for_identity(name: str) -> PlaywrightRedditClient:
+    """Return cached PlaywrightRedditClient for a registered identity name."""
+    from gtm.identity.session import session_dir_for_identity
+    session_dir = session_dir_for_identity(name, "reddit")
+    return get_reddit_browser_client(session_dir)
 
 
 def reset_reddit_browser_client() -> None:
-    """Reset the singleton. Useful for testing."""
-    global _default_client
-    _default_client = None
+    """Reset all cached clients. Useful for testing."""
+    global _clients_by_dir
+    _clients_by_dir = {}
