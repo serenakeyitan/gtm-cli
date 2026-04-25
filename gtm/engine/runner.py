@@ -258,6 +258,7 @@ def _build_agent_config(identities_dir: Path) -> Any:
             self.promoter = "claude-sonnet-4-20250514"
             self.hn_promoter = "claude-sonnet-4-20250514"
             self.twitter_promoter = "claude-sonnet-4-20250514"
+            self.engagement_loop = "claude-sonnet-4-20250514"
 
     class _GitHubConfig:
         def __init__(self):
