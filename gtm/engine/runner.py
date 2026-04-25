@@ -6,7 +6,6 @@ v0.1: Sequential execution only. v0.2 will add DAG/parallel.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -258,6 +257,7 @@ def _build_agent_config(identities_dir: Path) -> Any:
             self.tester = "claude-sonnet-4-20250514"
             self.promoter = "claude-sonnet-4-20250514"
             self.hn_promoter = "claude-sonnet-4-20250514"
+            self.twitter_promoter = "claude-sonnet-4-20250514"
 
     class _GitHubConfig:
         def __init__(self):
