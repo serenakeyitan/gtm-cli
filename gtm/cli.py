@@ -22,7 +22,6 @@ from gtm import __version__
 from gtm.config import (
     CONFIG_DIR,
     IDENTITIES_DIR,
-    OUTPUT_DIR,
     ensure_dirs,
     GrowthConfig,
 )
@@ -159,7 +158,7 @@ def auth(platform, username, email, use_stdin):
                     )
                 )
                 _save_identity(platform, username, metadata)
-                console.print(f"  [green]✅ Logged in![/green]")
+                console.print("  [green]✅ Logged in![/green]")
             except Exception as e:
                 console.print(f"  [red]❌ Login failed: {e}[/red]")
                 sys.exit(1)
@@ -210,11 +209,11 @@ def auth(platform, username, email, use_stdin):
                     plat.auth_interactive(identity_dir, username=username)
                 )
                 _save_identity(platform, username, metadata)
-                console.print(f"  [green]✅ Login detected! Session saved.[/green]")
+                console.print("  [green]✅ Login detected! Session saved.[/green]")
                 console.print(f"     Identity: [bold]{platform}:{username}[/bold]")
             except Exception as e:
                 console.print(f"  [red]❌ Login failed: {e}[/red]")
-                console.print(f"\n  Try cookie auth instead:")
+                console.print("\n  Try cookie auth instead:")
                 console.print(f"    [bold]gtm auth {platform} -u {username}[/bold]")
                 sys.exit(1)
 
@@ -350,7 +349,7 @@ def rewrite_cmd(text, target_platform, json_output):
             click.echo(json.dumps({"error": err}))
             sys.exit(1)
         console.print(f"[yellow]Rewrite failed: {err}[/yellow]")
-        console.print(f"\n  [dim]Falling back to deterministic adaptation...[/dim]")
+        console.print("\n  [dim]Falling back to deterministic adaptation...[/dim]")
         asyncio.run(_fallback_rewrite(text, target_platform))
         return
 
@@ -556,7 +555,7 @@ def migrate_from_openclaw_cmd():
         console.print(f"  [green]✅ Migrated {len(migrated)} identities:[/green]")
         for name in migrated:
             console.print(f"     {name}")
-        console.print(f"\n  No re-authentication needed. Run [bold]gtm status[/bold] to verify.")
+        console.print("\n  No re-authentication needed. Run [bold]gtm status[/bold] to verify.")
     else:
         console.print("  No credentials found to migrate.")
 
@@ -636,7 +635,6 @@ def modules_list(category, json_output):
 @click.option("--description", "-d", default="", help="Module description")
 def modules_create(name, description):
     """Scaffold a new strategy YAML file."""
-    from gtm.config import GrowthConfig
     strategies_dir = Path("~/.config/gtm/strategies").expanduser()
     strategies_dir.mkdir(parents=True, exist_ok=True)
 
@@ -715,7 +713,7 @@ modules:
         return
     console.print(f"\n  [green]✅ Strategy created: {filepath}[/green]")
     console.print(f"  Edit it, then run: [bold]gtm run {safe_name}[/bold]")
-    console.print(f"\n  Available modules: [bold]gtm modules list[/bold]")
+    console.print("\n  Available modules: [bold]gtm modules list[/bold]")
 
 
 @modules.command("info")
@@ -737,7 +735,7 @@ def modules_info(name):
         console.print(f"  Platform:    {m.platform}")
     console.print(f"  Auth:        {'Required 🔑' if m.requires_auth else 'Not needed'}")
     if m.param_schema:
-        console.print(f"\n  [bold]Parameters:[/bold]")
+        console.print("\n  [bold]Parameters:[/bold]")
         for k, v in m.param_schema.items():
             req = " (required)" if v.get("required") else f" (default: {v.get('default', '?')})"
             console.print(f"    {k}: {v.get('type', '?')}{req}")
@@ -835,7 +833,7 @@ def plan_cmd(description, save, json_output):
         click.echo(json.dumps({"yaml": yaml_text}))
         return
 
-    console.print(f"\n  [bold]Generated strategy:[/bold]\n")
+    console.print("\n  [bold]Generated strategy:[/bold]\n")
     console.print(yaml_text)
 
     if save:
@@ -867,7 +865,6 @@ def listen_cmd(query, platforms, count, json_output):
     _ensure_platforms_registered()
     from gtm.output.listener import listen
     from gtm.identity.manager import IdentityManager
-    from gtm.config import IDENTITIES_DIR
 
     platform_list = [p.strip() for p in platforms.split(",")]
 
@@ -1005,7 +1002,7 @@ def twitter_post(text, as_identity, generate_prompt, dry_run, force, json_output
         if not text:
             sys.exit(1)
         if not dry_run and not json_output:
-            console.print(f"\n  [bold]Generated tweet:[/bold]")
+            console.print("\n  [bold]Generated tweet:[/bold]")
             console.print(f"  {text}\n")
             if not click.confirm("  Post this?", default=True):
                 console.print("  Cancelled.")
@@ -1209,7 +1206,7 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
         if json_output:
             click.echo(json.dumps({"dry_run": True, "platform": platform, "identity": identity.name, "text": text, **extra_info}))
         else:
-            console.print(f"\n[dim]DRY RUN — nothing will be posted[/dim]")
+            console.print("\n[dim]DRY RUN — nothing will be posted[/dim]")
             console.print(f"  Platform: {platform}")
             console.print(f"  Account:  {identity.name}")
             if text:
@@ -1241,7 +1238,7 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
                 "url": result.url,
             }))
         else:
-            console.print(f"[green]✅ Posted![/green]")
+            console.print("[green]✅ Posted![/green]")
             if result.url:
                 console.print(f"   {result.url}")
     else:
@@ -1275,7 +1272,7 @@ async def _do_post(platform: str, action: str, text: str, as_identity, dry_run, 
 
                 from gtm.output.logger import log_post
                 log_post(platform, alt.name, text, {"post_id": result.post_id, "url": result.url}, **kwargs)
-                console.print(f"[green]✅ Posted![/green]")
+                console.print("[green]✅ Posted![/green]")
                 if result.url:
                     console.print(f"   {result.url}")
             else:
@@ -1488,7 +1485,7 @@ async def _do_reply(platform: str, target_id: str, text: str, as_identity, dry_r
     result = await plat.reply(identity.identity_dir, target_id, text)
     if result.success:
         limiter.record(identity.name, "reply")
-        console.print(f"[green]✅ Replied![/green]")
+        console.print("[green]✅ Replied![/green]")
     else:
         console.print(f"[red]❌ Failed: {result.error}[/red]")
         sys.exit(1)
@@ -1663,7 +1660,7 @@ def _save_cookies(username: str, identity_dir: Path, cookie_dict: dict) -> None:
     os.chmod(identity_dir, stat.S_IRWXU)  # 0700
 
     _prompt_and_save_identity("twitter", username, {"auth_method": "cookies_manual"})
-    console.print(f"\n     Test it: [bold]gtm twitter search 'AI agents' --count 3[/bold]")
+    console.print("\n     Test it: [bold]gtm twitter search 'AI agents' --count 3[/bold]")
 
 
 REDDIT_COOKIE_INSTRUCTIONS = """
@@ -1761,13 +1758,13 @@ def _auth_cookie_paste(platform: str, username: str, identity_dir: Path, raw: st
         _prompt_and_save_identity(platform, username, {"auth_method": "cookies_manual"})
     else:
         _save_identity(platform, username, {"auth_method": "cookies_manual"}, role="default")
-        console.print(f"\n  [green]✅ Cookies saved![/green]")
+        console.print("\n  [green]✅ Cookies saved![/green]")
         console.print(f"     Identity: [bold]{platform}:{username}[/bold]")
 
     if platform == "reddit":
-        console.print(f"\n     Test it: [bold]gtm reddit search 'test' --count 1[/bold]")
+        console.print("\n     Test it: [bold]gtm reddit search 'test' --count 1[/bold]")
     else:
-        console.print(f"\n     Test it: [bold]gtm hn search 'test' --count 1[/bold]")
+        console.print("\n     Test it: [bold]gtm hn search 'test' --count 1[/bold]")
 
 
 def _generate_content(platform: str, prompt: str, **kwargs) -> str | None:
@@ -1826,7 +1823,7 @@ def _handle_auth_error(error: Exception, platform: str) -> None:
     from gtm.platforms.twitter.client import TwitterAuthError
 
     if isinstance(error, TwitterAuthError):
-        console.print(f"\n[bold red]🔑 Session expired[/bold red]")
+        console.print("\n[bold red]🔑 Session expired[/bold red]")
         console.print(f"\n  Re-authenticate:  [bold]gtm auth {platform}[/bold]\n")
         sys.exit(1)
 
@@ -1844,6 +1841,80 @@ def _save_identity(platform: str, username: str, metadata: dict, role: str = "de
         rate_profile="conservative",
     )
     identity.save()
+
+
+@main.group()
+def warmup():
+    """Warm-up list — handles to ping at launch time."""
+    pass
+
+
+@warmup.command("add")
+@click.argument("handle")
+@click.option("--launch", required=True, help="Launch slug (e.g. first-tree)")
+@click.option("--platform", required=True,
+              type=click.Choice(["twitter", "reddit"]))
+@click.option("--notes", default="")
+def warmup_add(handle, launch, platform, notes):
+    """Add HANDLE to a launch's warm-up list."""
+    from gtm.modules import warmup as wm
+    wm.add(launch, handle, platform, notes)
+    click.echo(f"Added {platform}:{handle} to warmup for '{launch}'.")
+
+
+@warmup.command("list")
+@click.option("--launch", default=None, help="Filter to one launch")
+def warmup_list(launch):
+    """List warm-up entries."""
+    from gtm.modules import warmup as wm
+    if launch:
+        entries = wm.list_for_launch(launch)
+        if not entries:
+            click.echo(f"No warmup entries for '{launch}'.")
+            return
+        click.echo(f"{launch}:")
+        for e in entries:
+            note = f"  ({e['notes']})" if e.get("notes") else ""
+            click.echo(f"  {e['platform']}:{e['handle']}  [{e['added_at']}]{note}")
+    else:
+        for lname in wm.all_launches():
+            click.echo(f"{lname}: {len(wm.list_for_launch(lname))} entries")
+
+
+@warmup.command("remove")
+@click.argument("handle")
+@click.option("--launch", required=True)
+@click.option("--platform", required=True,
+              type=click.Choice(["twitter", "reddit"]))
+def warmup_remove(handle, launch, platform):
+    """Remove HANDLE from a launch's warm-up list."""
+    from gtm.modules import warmup as wm
+    if wm.remove(launch, handle, platform):
+        click.echo(f"Removed {platform}:{handle} from '{launch}'.")
+    else:
+        click.echo("Not found.", err=True)
+        sys.exit(1)
+
+
+@main.command()
+@click.option("--posts-file", required=True, type=click.Path(exists=True),
+              help="JSON file with list of {platform, url, id, title, identity}")
+@click.option("--auto", is_flag=True,
+              help="Auto-post buy_signal replies (default: draft only)")
+def engagement(posts_file, auto):
+    """Run the engagement loop on a list of live posts."""
+    from gtm.agents.engagement_loop import run_engagement_loop
+    from gtm.config import IDENTITIES_DIR
+    from gtm.engine.runner import _build_agent_config
+
+    setup_logging(False)
+    config = _build_agent_config(IDENTITIES_DIR)
+    posts = json.loads(Path(posts_file).read_text())
+
+    digest = asyncio.run(
+        run_engagement_loop(posts, config, draft_only=not auto)
+    )
+    click.echo(json.dumps(digest, indent=2))
 
 
 if __name__ == "__main__":
