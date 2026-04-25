@@ -41,7 +41,7 @@ class SynthesizeModule(Module):
         output_count = params.get("output_count", 10)
 
         try:
-            from claude_code_sdk import query
+            from claude_agent_sdk import query
 
             # Prepare data summary (truncate to avoid context overflow)
             items_json = json.dumps(input_data.data[:50], indent=1, default=str)
@@ -58,8 +58,8 @@ class SynthesizeModule(Module):
                 f"Output ONLY the JSON array, nothing else."
             )
 
-            from claude_code_sdk import ClaudeCodeOptions
-            options = ClaudeCodeOptions(model="claude-sonnet-4-20250514", max_turns=1)
+            from claude_agent_sdk import ClaudeAgentOptions
+            options = ClaudeAgentOptions(model="claude-sonnet-4-20250514", max_turns=1)
 
             result_text = ""
             async for message in query(prompt=prompt, options=options):
@@ -88,7 +88,7 @@ class SynthesizeModule(Module):
                                 metadata={"fallback": True})
 
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed. Run: pip install gtm-cli[agents]"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed. Run: pip install gtm-cli[agents]"])
         except Exception as e:
             # On ANY failure (rate limit, etc.), fall back to deterministic ranking
             log.warning("LLM synthesis failed (%s), falling back to engagement sort", e)

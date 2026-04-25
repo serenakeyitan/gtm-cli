@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from claude_code_sdk import tool
+from claude_agent_sdk import tool
 
 from gtm.platforms.twitter.client import get_twitter_client, TwitterClientError
 

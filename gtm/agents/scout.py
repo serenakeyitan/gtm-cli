@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
     create_sdk_mcp_server,
 )
 
@@ -105,7 +105,7 @@ async def run_twitter_scout(
         tools=[twitter_search, twitter_user_tweets, twitter_get_tweet, read_run_state, write_phase_output],
     )
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         model=config.models.scout,
         system_prompt=system_prompt,
         mcp_servers={"twitter": server},

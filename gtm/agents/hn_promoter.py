@@ -18,8 +18,8 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
     create_sdk_mcp_server,
 )
 
@@ -107,7 +107,7 @@ async def run_hn_promoter(
         ],
     )
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         model=config.models.promoter,
         system_prompt=system_prompt,
         mcp_servers={"hn": server},

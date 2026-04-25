@@ -60,7 +60,7 @@ class PromoteRedditAgentModule(Module):
             return ModuleResult(success=True, data=posts,
                                 metadata={"items": len(input_data.data), "posts": len(posts)})
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed"])
         except Exception as e:
             return ModuleResult(success=False, errors=[str(e)])
 

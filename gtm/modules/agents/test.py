@@ -52,7 +52,7 @@ class TestAgentModule(Module):
             return ModuleResult(success=True, data=tested,
                                 metadata={"builds": len(input_data.data), "tested": len(tested)})
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed"])
         except Exception as e:
             return ModuleResult(success=False, errors=[str(e)])
 

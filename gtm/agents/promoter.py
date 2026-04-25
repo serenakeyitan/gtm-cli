@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
     create_sdk_mcp_server,
 )
 
@@ -109,7 +109,12 @@ async def run_promoter(
         f"  For strict subs: NO first-person language at all. neutral resource sharing.\n"
         f"  For lenient subs: can be slightly more direct but still casual\n\n"
         f"Phase C — Staggered Posting:\n"
-        f"  Use `reddit_browser_submit` for each post.\n"
+        f"  Before posting, call `reddit_list_identities` to see which "
+        f"identities are available. For each sub, call `reddit_pick_identity_for_sub` "
+        f"to get the safest identity (skips identities with prior removals there).\n"
+        f"  Use `reddit_browser_submit` for each post and pass the chosen `identity` "
+        f"name so the right session posts.\n"
+        f"  Record `identity` on every post in the output JSON.\n"
         f"  First sub immediately, remaining at {stagger}-hour intervals\n"
         f"  Record all URLs and post IDs\n\n"
         f"Phase D — Monitoring:\n"
@@ -117,7 +122,7 @@ async def run_promoter(
         f"  Detect deletion (author=None or removed status), record metrics.\n"
         f"  If deleted: note for rewrite, do NOT repost same content.\n\n"
         f"Output a JSON object with: idea_id, posts (array of "
-        f"{{subreddit, url, post_id, title, kind, score, num_comments, "
+        f"{{subreddit, identity, url, post_id, title, kind, score, num_comments, "
         f"deleted, sub_strictness}})"
     )
 
@@ -130,12 +135,18 @@ async def run_promoter(
             # Browser-based tools (for posting and checking)
             reddit_browser_submit, reddit_browser_check_post,
             reddit_browser_subreddit_rules,
+            # Cross-post anti-spam lint
+            reddit_cross_post_lint,
+            # Multi-identity routing
+            reddit_list_identities,
+            reddit_identity_affinity,
+            reddit_pick_identity_for_sub,
             # State tools
             read_run_state, write_phase_output,
         ],
     )
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         model=config.models.promoter,
         system_prompt=system_prompt,
         mcp_servers={"reddit": server},

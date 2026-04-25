@@ -11,8 +11,8 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
 )
 
 from gtm.agents.base import (
@@ -59,7 +59,7 @@ async def run_tester(
     # Use tester model if specified, otherwise fall back to builder model
     model = getattr(config.models, 'tester', config.models.builder)
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         model=model,
         system_prompt=system_prompt,
         allowed_tools=[

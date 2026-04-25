@@ -57,7 +57,7 @@ class PromoteHNAgentModule(Module):
             return ModuleResult(success=True, data=submissions,
                                 metadata={"items": len(input_data.data), "submitted": len(submissions)})
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed"])
         except Exception as e:
             return ModuleResult(success=False, errors=[str(e)])
 

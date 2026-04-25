@@ -1,4 +1,4 @@
-"""Tracked agent runner — wraps claude_code_sdk.query() to log every action.
+"""Tracked agent runner — wraps claude_agent_sdk.query() to log every action.
 
 Intercepts the SDK message stream and records tool calls, assistant
 messages, and results to the ActivityLogger.  Drop-in replacement for
@@ -13,8 +13,8 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
     AssistantMessage,
     ResultMessage,
     TextBlock,
@@ -22,14 +22,14 @@ from claude_code_sdk import (
     ToolResultBlock,
     query,
 )
-from claude_code_sdk._errors import MessageParseError
+from claude_agent_sdk._errors import MessageParseError
 
 from gtm.agents.activity_log import ActivityLogger
 
 log = logging.getLogger(__name__)
 
 
-def _has_sdk_mcp_servers(options: ClaudeCodeOptions) -> bool:
+def _has_sdk_mcp_servers(options: ClaudeAgentOptions) -> bool:
     """Check if options include SDK-type MCP servers.
 
     SDK MCP servers require the bidirectional control protocol (streaming
@@ -72,7 +72,7 @@ async def _prompt_as_stream(
 
 async def run_tracked_agent(
     agent_name: str,
-    options: ClaudeCodeOptions,
+    options: ClaudeAgentOptions,
     prompt: str,
     logger: ActivityLogger | None = None,
 ) -> str:
@@ -87,7 +87,7 @@ async def run_tracked_agent(
     agent_name:
         Human-readable agent identifier (e.g. "scout", "builder").
     options:
-        The ClaudeCodeOptions to pass to query().
+        The ClaudeAgentOptions to pass to query().
     prompt:
         The user prompt to send to the agent.
     logger:

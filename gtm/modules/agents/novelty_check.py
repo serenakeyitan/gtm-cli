@@ -45,7 +45,7 @@ class NoveltyCheckAgentModule(Module):
             return ModuleResult(success=True, data=novel,
                                 metadata={"input": len(input_data.data), "novel": len(novel)})
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed"])
         except Exception as e:
             return ModuleResult(success=False, errors=[str(e)])
 

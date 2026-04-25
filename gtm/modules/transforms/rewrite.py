@@ -47,7 +47,7 @@ class RewriteModule(Module):
             return ModuleResult(success=True, data=rewritten,
                                 metadata={"platform": platform, "rewritten": len(rewritten)})
         except ImportError:
-            log.warning("claude-code-sdk not installed. Returning original content. Run: pip install gtm-cli[agents]")
+            log.warning("claude-agent-sdk not installed. Returning original content. Run: pip install gtm-cli[agents]")
             return ModuleResult(success=True, data=input_data.data,
                                 metadata={"platform": platform, "rewritten": 0, "note": "LLM not available"})
         except Exception as e:
@@ -56,7 +56,7 @@ class RewriteModule(Module):
 
     async def _llm_rewrite(self, items: list[dict], field: str, platform: str, style_rules: str) -> list[dict]:
         """Use Claude to rewrite each item's text field for the target platform."""
-        from claude_code_sdk import query
+        from claude_agent_sdk import query
 
         rewritten = []
         for item in items:
@@ -73,8 +73,8 @@ class RewriteModule(Module):
             )
 
             try:
-                from claude_code_sdk import ClaudeCodeOptions
-                options = ClaudeCodeOptions(model="claude-sonnet-4-20250514", max_turns=1)
+                from claude_agent_sdk import ClaudeAgentOptions
+                options = ClaudeAgentOptions(model="claude-sonnet-4-20250514", max_turns=1)
 
                 rewritten_text = ""
                 async for message in query(prompt=prompt, options=options):

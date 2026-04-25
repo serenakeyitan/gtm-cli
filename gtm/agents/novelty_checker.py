@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
     create_sdk_mcp_server,
 )
 
@@ -56,7 +56,7 @@ async def run_novelty_checker(
         tools=[github_search_repos, twitter_search, read_run_state, write_phase_output],
     )
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         model=config.models.novelty,
         system_prompt=system_prompt,
         mcp_servers={"novelty": server},

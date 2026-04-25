@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from claude_code_sdk import (
-    ClaudeCodeOptions,
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
     create_sdk_mcp_server,
 )
 
@@ -64,7 +64,7 @@ async def run_builder(
         tools=[github_create_repo, github_create_pr],
     )
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         model=config.models.builder,
         system_prompt=system_prompt,
         mcp_servers={"github": server},

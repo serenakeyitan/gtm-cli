@@ -6,7 +6,6 @@ v0.1: Sequential execution only. v0.2 will add DAG/parallel.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -114,14 +113,14 @@ async def run_strategy(
                 state["steps"][step_id] = {"status": "failed", "error": str(e)}
                 state["errors"].append(f"Step {step_id}: {e}")
 
-        # Agent steps — requires claude-code-sdk (pip install gtm-cli[agents])
+        # Agent steps — requires claude-agent-sdk (pip install gtm-cli[agents])
         elif step.type == "agent":
             try:
                 result = await _execute_agent_step(step, resolved_params, step_outputs, mgr)
                 state["steps"][step_id] = {"status": "success", "result": result}
                 step_outputs[step_id] = result
             except ImportError:
-                log.warning("Step [%s]: claude-code-sdk not installed. Run: pip install gtm-cli[agents]", step_id)
+                log.warning("Step [%s]: claude-agent-sdk not installed. Run: pip install gtm-cli[agents]", step_id)
                 state["steps"][step_id] = {"status": "skipped", "reason": "Install agents: pip install gtm-cli[agents]"}
             except Exception as e:
                 log.error("Step [%s] failed: %s", step_id, e)
@@ -258,6 +257,8 @@ def _build_agent_config(identities_dir: Path) -> Any:
             self.tester = "claude-sonnet-4-20250514"
             self.promoter = "claude-sonnet-4-20250514"
             self.hn_promoter = "claude-sonnet-4-20250514"
+            self.twitter_promoter = "claude-sonnet-4-20250514"
+            self.engagement_loop = "claude-sonnet-4-20250514"
 
     class _GitHubConfig:
         def __init__(self):

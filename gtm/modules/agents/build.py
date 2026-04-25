@@ -48,7 +48,7 @@ class BuildAgentModule(Module):
             return ModuleResult(success=True, data=builds,
                                 metadata={"ideas": len(input_data.data), "builds": len(builds)})
         except ImportError:
-            return ModuleResult(success=False, errors=["claude-code-sdk not installed"])
+            return ModuleResult(success=False, errors=["claude-agent-sdk not installed"])
         except Exception as e:
             return ModuleResult(success=False, errors=[str(e)])
 
