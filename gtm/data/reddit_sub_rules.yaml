@@ -70,7 +70,13 @@ subs:
   ChatGPTCoding:
     min_total_karma: null
     min_age_days: null
-    notes: "Cursor/Claude Code crowd. Karma rules loose. Open to agent-infra topics."
+    notes: "Cursor/Claude Code crowd. Karma rules loose. BUT: requires post flair, and the flair UI silently rejects valid selections — submit kept failing with 'add a flair' even when one was selected (2026-04-27). Pivoted to r/AgentsOfAI. Retest before using."
+    permanent_skip: false  # not banned, just blocked by flair UI bug; revisit
+
+  AgentsOfAI:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Used as fallback for r/ChatGPTCoding (2026-04-27). Sister sub to r/AI_Agents. Text posts allowed, no flair required."
     permanent_skip: false
 
   AutoGenAI:
