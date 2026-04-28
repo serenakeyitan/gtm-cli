@@ -188,13 +188,30 @@ def preflight(
     *,
     rules: dict[str, Any] | None = None,
     stats: dict[str, Any] | None = None,
+    auto_fetch: bool = True,
+    max_age_days: int = 30,
 ) -> dict[str, Any]:
     """Preflight an (identity, sub) pair.
 
     Returns ``{identity, sub, stats, verdict, reasons, notes, permanent_skip,
-    rule_found}``. ``stats`` may be passed in to skip the network fetch
-    (useful for tests).
+    rule_found, fetch_action}``. ``stats`` may be passed in to skip the
+    network fetch (useful for tests).
+
+    When ``auto_fetch`` is True (default), missing or stale (>max_age_days)
+    sub rules are fetched live from reddit and persisted to the YAML before
+    evaluating. This is the "always read the sub rules" guarantee.
     """
+    fetch_action = "not_attempted"
+    if auto_fetch:
+        try:
+            from .sub_rules_fetcher import ensure_sub_rule  # local import to avoid cycle
+            result = ensure_sub_rule(sub, max_age_days=max_age_days, fetch=True)
+            fetch_action = result["action"]
+            if result["fetched"]:
+                rules = load_sub_rules()  # reload after write
+        except Exception as e:  # never block preflight on a fetch failure
+            fetch_action = f"error: {e}"
+
     if rules is None:
         rules = load_sub_rules()
     if stats is None:
@@ -202,7 +219,7 @@ def preflight(
 
     rule = _lookup_sub_rule(sub, rules)
     if rule is None:
-        # No rule for this sub → treat as PASS but flag rule_found=False.
+        # No rule even after fetch attempt → treat as PASS, flag rule_found=False.
         return {
             "identity": identity,
             "sub": sub,
@@ -212,6 +229,7 @@ def preflight(
             "notes": None,
             "permanent_skip": False,
             "rule_found": False,
+            "fetch_action": fetch_action,
         }
 
     eval_result = evaluate(stats, rule)
@@ -235,4 +253,5 @@ def preflight(
         "notes": rule.get("notes"),
         "permanent_skip": permanent_skip,
         "rule_found": True,
+        "fetch_action": fetch_action,
     }
