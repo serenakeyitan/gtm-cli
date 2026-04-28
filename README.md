@@ -1,5 +1,7 @@
 # gtm-cli
 
+> **Launching something?** Skip to the [10-minute Launch Onboarding](docs/LAUNCH-ONBOARDING.md) — scaffold a launch dir, draft, ship, sync, and deploy a dashboard end-to-end.
+
 > Claude Code gave developers a terminal for everything.  
 > **gtm-cli gives marketers the same.**
 
