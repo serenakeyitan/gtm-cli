@@ -30,6 +30,12 @@ from gtm.platforms.reddit.tools import (
     reddit_browser_submit,
     reddit_browser_check_post,
     reddit_browser_subreddit_rules,
+    # Cross-post lint + multi-identity routing
+    reddit_cross_post_lint,
+    reddit_list_identities,
+    reddit_identity_affinity,
+    reddit_pick_identity_for_sub,
+    reddit_preflight,
 )
 from gtm.agents.state_tools import read_run_state, write_phase_output
 
@@ -110,8 +116,15 @@ async def run_promoter(
         f"  For lenient subs: can be slightly more direct but still casual\n\n"
         f"Phase C — Staggered Posting:\n"
         f"  Before posting, call `reddit_list_identities` to see which "
-        f"identities are available. For each sub, call `reddit_pick_identity_for_sub` "
-        f"to get the safest identity (skips identities with prior removals there).\n"
+        f"identities are available. For each (identity, sub) pair, call "
+        f"`reddit_preflight` FIRST to check karma/age qualification:\n"
+        f"    - FAIL → DROP that identity from the candidate list for this sub. "
+        f"Never post a FAIL pair (wastes the slot and risks the account).\n"
+        f"    - BORDERLINE → allowed but log a warning; the identity barely "
+        f"qualifies, monitor for removal.\n"
+        f"    - PASS → safe to post.\n"
+        f"  Then for each sub, call `reddit_pick_identity_for_sub` on the "
+        f"surviving (non-FAIL) candidates to get the safest identity.\n"
         f"  Use `reddit_browser_submit` for each post and pass the chosen `identity` "
         f"name so the right session posts.\n"
         f"  Record `identity` on every post in the output JSON.\n"
@@ -141,6 +154,7 @@ async def run_promoter(
             reddit_list_identities,
             reddit_identity_affinity,
             reddit_pick_identity_for_sub,
+            reddit_preflight,
             # State tools
             read_run_state, write_phase_output,
         ],

@@ -286,6 +286,70 @@ async def reddit_identity_affinity(args):
 
 
 @tool(
+    "reddit_preflight",
+    (
+        "Preflight a (reddit identity, sub) pair against per-sub karma/age "
+        "rules from gtm/data/reddit_sub_rules.yaml. Returns "
+        "{verdict: PASS|BORDERLINE|FAIL, reasons, notes, permanent_skip, stats}. "
+        "FAIL means do NOT post from this identity to this sub. BORDERLINE means "
+        "post is allowed but the identity barely qualifies — log a warning."
+    ),
+    {"identity": str, "sub": str},
+)
+async def reddit_preflight(args):
+    try:
+        from gtm.modules.preflight import preflight as _preflight, PreflightError
+        identity = (args.get("identity") or "").strip()
+        sub = (args.get("sub") or "").strip()
+        if not identity or not sub:
+            return {"content": [{"type": "text", "text": "identity and sub required"}],
+                    "isError": True}
+        try:
+            result = _preflight(identity, sub)
+        except PreflightError as e:
+            return {"content": [{"type": "text", "text": json.dumps({
+                "error": str(e),
+                "identity": identity,
+                "sub": sub,
+            })}], "isError": True}
+        return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}], "isError": True}
+
+
+def filter_identities_by_preflight(
+    sub: str,
+    candidates: list[str],
+    *,
+    rules: dict | None = None,
+) -> tuple[list[str], list[dict]]:
+    """Drop FAIL identities from candidates; flag BORDERLINE in returned log.
+
+    Returns ``(safe_candidates, log)`` where ``log`` is a list of preflight
+    result dicts (one per candidate, including FAILs that were dropped).
+    Used by the Promoter agent's Phase C before picking an identity.
+    """
+    from gtm.modules.preflight import preflight as _preflight, PreflightError
+
+    safe: list[str] = []
+    log: list[dict] = []
+    for ident in candidates:
+        try:
+            result = _preflight(ident, sub, rules=rules)
+        except PreflightError as e:
+            log.append({"identity": ident, "sub": sub, "verdict": "ERROR",
+                        "error": str(e)})
+            # On fetch error, leave the identity in the candidate pool but
+            # flag it — we don't want a transient 429 to nuke routing.
+            safe.append(ident)
+            continue
+        log.append(result)
+        if result["verdict"] != "FAIL":
+            safe.append(ident)
+    return safe, log
+
+
+@tool(
     "reddit_pick_identity_for_sub",
     (
         "Recommend the best registered identity for posting to a subreddit, "
