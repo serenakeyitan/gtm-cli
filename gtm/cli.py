@@ -1092,8 +1092,33 @@ def reddit_search(query, sub, count, json_output):
 @click.option("--generate", "-g", "generate_prompt", default="", help="Generate title + body from description")
 @click.option("--dry-run", is_flag=True)
 @click.option("--force", is_flag=True)
-def reddit_submit(as_identity, sub, title, body, url, generate_prompt, dry_run, force):
+@click.option("--strict", is_flag=True,
+              help="Treat preflight BORDERLINE verdicts as blocking")
+@click.option("--override", "override_reason", default="",
+              help="Bypass preflight FAIL/permanent_skip with a written reason "
+                   "(recorded for audit). Required to post when preflight blocks.")
+@click.option("--no-preflight", is_flag=True,
+              help="Skip the preflight rule gate entirely. Last-resort escape "
+                   "hatch — prefer --override <reason> so the bypass is recorded.")
+def reddit_submit(as_identity, sub, title, body, url, generate_prompt,
+                  dry_run, force, strict, override_reason, no_preflight):
     """Submit a post to a subreddit. Use --generate to draft content."""
+    if not no_preflight and as_identity:
+        from gtm.modules.submit_gate import evaluate_submit, format_gate_summary
+        from gtm.modules.preflight import PreflightError
+        try:
+            gate = evaluate_submit(as_identity, sub,
+                                   strict=strict,
+                                   override_reason=override_reason or None)
+            for line in format_gate_summary(gate):
+                console.print(line)
+            if not gate["allowed"]:
+                console.print("[red]submit blocked by preflight gate[/red] "
+                              "(use --override \"<reason>\" to bypass, or "
+                              "--no-preflight to skip the gate entirely)")
+                sys.exit(1)
+        except PreflightError as e:
+            console.print(f"[yellow]preflight skipped (couldn't fetch user stats): {e}[/yellow]")
     if generate_prompt:
         generated = _generate_content("reddit", generate_prompt, subreddit=sub)
         if not generated:
