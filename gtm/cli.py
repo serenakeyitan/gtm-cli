@@ -1116,6 +1116,65 @@ def reddit_submit(as_identity, sub, title, body, url, generate_prompt, dry_run, 
                           subreddit=sub, title=title, url=url))
 
 
+@reddit.command("preflight")
+@click.argument("sub")
+@click.option("--identity", required=True,
+              help="Reddit username to preflight (e.g. Pale_Stand5217 or u/Pale_Stand5217)")
+@click.option("--json", "json_output", is_flag=True, help="JSON output for scripts")
+def reddit_preflight(sub, identity, json_output):
+    """Preflight a Reddit (identity, sub) pair against per-sub karma/age rules.
+
+    Exit codes: 0 = PASS or BORDERLINE; 1 = FAIL; 2 = error fetching user.
+    """
+    from gtm.modules.preflight import preflight, PreflightError
+
+    try:
+        result = preflight(identity, sub)
+    except PreflightError as e:
+        if json_output:
+            click.echo(json.dumps({"error": str(e)}))
+        else:
+            console.print(f"[red]preflight error:[/red] {e}")
+        sys.exit(2)
+
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        s = result["stats"]
+        click.echo(f"identity: u/{s.get('username', identity)}")
+        click.echo(f"  karma: {s['total_karma']} total "
+                   f"(link {s['link_karma']}, comment {s['comment_karma']})")
+        click.echo(f"  age: {s['age_days']} days")
+        click.echo(f"sub: r/{result['sub']}")
+        if not result["rule_found"]:
+            click.echo("  rule: (no rule on file — treating as PASS)")
+        else:
+            for r in result["reasons"]:
+                rk = r.get("rule", "?")
+                if r["status"] == "fail":
+                    click.echo(f"  rule: {rk} FAIL ({r.get('detail', '')})")
+                elif r["status"] == "borderline":
+                    pct = r.get("margin_pct", 0)
+                    click.echo(f"  rule: {rk}>={r.get('floor')} "
+                               f"(margin: {pct}% — borderline)")
+                else:
+                    floor = r.get("floor")
+                    if floor is None:
+                        click.echo(f"  rule: {rk} ✓ ({r.get('detail', '')})")
+                    else:
+                        click.echo(f"  rule: {rk}>={floor} ✓")
+        verdict = result["verdict"]
+        color = {"PASS": "green", "BORDERLINE": "yellow", "FAIL": "red"}.get(verdict, "white")
+        console.print(f"verdict: [{color}]{verdict}[/{color}]")
+        if result.get("notes"):
+            click.echo(f"notes: \"{result['notes']}\"")
+        if result.get("permanent_skip"):
+            click.echo("permanent_skip: true")
+
+    if result["verdict"] == "FAIL":
+        sys.exit(1)
+
+
 # ── HN Commands ───────────────────────────────────────────────────────
 
 
