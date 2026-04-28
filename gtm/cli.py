@@ -1976,5 +1976,205 @@ def engagement(posts_file, auto):
     click.echo(json.dumps(digest, indent=2))
 
 
+# ── Launch ────────────────────────────────────────────────────────────
+
+
+@main.group()
+def launch():
+    """Launch directory — scaffold, link, and inspect."""
+    pass
+
+
+def _resolve_launch_dir(launch_path: str | None):
+    """Resolve a LaunchDir from --launch <path> or walk-up from cwd."""
+    from gtm.launch import LaunchDir
+
+    if launch_path:
+        return LaunchDir.load(Path(launch_path).expanduser().resolve())
+    found = LaunchDir.find()
+    if not found:
+        click.echo(
+            "No .gtm-launch.yaml found in cwd or any parent. "
+            "Run `gtm launch init` or pass --launch <path>.",
+            err=True,
+        )
+        sys.exit(1)
+    return found
+
+
+def _prompt_products() -> list[dict]:
+    """Interactively collect product entries."""
+    products: list[dict] = []
+    click.echo("\nAdd products (blank key to finish):")
+    while True:
+        key = click.prompt("  product key", default="", show_default=False).strip()
+        if not key:
+            break
+        name = click.prompt("    name", default=key)
+        tagline = click.prompt("    tagline", default="")
+        status = click.prompt(
+            "    status",
+            default="active",
+            type=click.Choice(["active", "next", "future"]),
+        )
+        products.append(
+            {"key": key, "name": name, "tagline": tagline, "status": status}
+        )
+    return products
+
+
+def _prompt_directions() -> list[dict]:
+    """Interactively collect direction entries."""
+    directions: list[dict] = []
+    click.echo("\nAdd directions (blank key to finish):")
+    while True:
+        key = click.prompt("  direction key", default="", show_default=False).strip()
+        if not key:
+            break
+        label = click.prompt("    label", default=key)
+        directions.append({"key": key, "label": label})
+    return directions
+
+
+@launch.command("init")
+@click.argument("path", required=False, type=click.Path())
+def launch_init(path):
+    """Scaffold a new launch directory at PATH (default: cwd)."""
+    from gtm.launch import LAUNCH_MARKER, LaunchDir
+    from gtm.launch.dir import build_default_config, scaffold_layout
+
+    target = Path(path).expanduser().resolve() if path else Path.cwd().resolve()
+    marker = target / LAUNCH_MARKER
+    if marker.exists():
+        click.echo(
+            f"{marker} already exists. Use `gtm launch info` to inspect, "
+            f"or delete it first to re-init.",
+            err=True,
+        )
+        sys.exit(1)
+
+    click.echo(f"Initializing launch dir at {target}")
+    products = _prompt_products()
+    directions = _prompt_directions()
+
+    cf_project = click.prompt(
+        "Cloudflare Pages project name (blank to skip)",
+        default="",
+        show_default=False,
+    ).strip()
+    dashboard = {"cloudflare_project": cf_project} if cf_project else {}
+
+    config = build_default_config(
+        products=products,
+        directions=directions,
+        default_identity_by_platform={},
+        dashboard=dashboard,
+    )
+    ld = LaunchDir(path=target, config=config)
+    created = scaffold_layout(target, products)
+    ld.write_marker()
+
+    click.echo(f"\n✓ Wrote {ld.marker_path}")
+    if created:
+        click.echo(f"✓ Created {len(created)} files/dirs:")
+        for p in created:
+            click.echo(f"    {p.relative_to(target)}")
+    click.echo(f"\nNext: `cd {target} && gtm launch info`")
+
+
+@launch.command("link")
+@click.argument("path", required=False, type=click.Path(exists=True, file_okay=False))
+def launch_link(path):
+    """Mark an existing directory as a launch dir.
+
+    DOES NOT overwrite any existing files (dashboard.html, README.md, posts/, …).
+    Only writes `.gtm-launch.yaml` after collecting prompts.
+    """
+    from gtm.launch import LAUNCH_MARKER, LaunchDir
+    from gtm.launch.dir import build_default_config
+
+    target = Path(path).expanduser().resolve() if path else Path.cwd().resolve()
+    marker = target / LAUNCH_MARKER
+    if marker.exists():
+        click.echo(f"{marker} already exists. Nothing to do.", err=True)
+        sys.exit(1)
+
+    click.echo(f"Linking existing dir as launch dir: {target}")
+    # Heuristic: any subdir with a posts/ folder OR ROADMAP.md is probably a product
+    inferred = []
+    for child in sorted(target.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        if (child / "posts").is_dir() or (child / "ROADMAP.md").is_file():
+            inferred.append(child.name)
+    if inferred:
+        click.echo(f"Inferred products from existing subdirs: {', '.join(inferred)}")
+        if click.confirm("Use these as the product list?", default=True):
+            products = [
+                {"key": k, "name": k, "tagline": "", "status": "active"}
+                for k in inferred
+            ]
+        else:
+            products = _prompt_products()
+    else:
+        products = _prompt_products()
+
+    directions = _prompt_directions()
+
+    cf_project = click.prompt(
+        "Cloudflare Pages project name (blank to skip)",
+        default="",
+        show_default=False,
+    ).strip()
+    dashboard = {"cloudflare_project": cf_project} if cf_project else {}
+
+    config = build_default_config(
+        products=products,
+        directions=directions,
+        default_identity_by_platform={},
+        dashboard=dashboard,
+    )
+    ld = LaunchDir(path=target, config=config)
+    ld.write_marker()
+    click.echo(f"\n✓ Wrote {ld.marker_path} (existing files untouched)")
+
+
+@launch.command("info")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+def launch_info(launch_path):
+    """Print the current launch dir's config."""
+    ld = _resolve_launch_dir(launch_path)
+    click.echo(f"Launch dir: {ld.path}")
+    click.echo(f"Marker:     {ld.marker_path}")
+    click.echo(f"Version:    {ld.config.get('version', '?')}")
+
+    click.echo("\nProducts:")
+    if not ld.products:
+        click.echo("  (none)")
+    for p in ld.products:
+        tag = f" — {p['tagline']}" if p.get("tagline") else ""
+        click.echo(f"  • {p.get('key')} [{p.get('status', '?')}]{tag}")
+
+    click.echo("\nDirections:")
+    if not ld.directions:
+        click.echo("  (none)")
+    for d in ld.directions:
+        click.echo(f"  • {d.get('key')} — {d.get('label')}")
+
+    click.echo("\nDefault identities:")
+    di = ld.default_identity_by_platform
+    if not di:
+        click.echo("  (none)")
+    for plat, ident in di.items():
+        click.echo(f"  • {plat}: {ident}")
+
+    dash = ld.dashboard_config
+    if dash:
+        click.echo("\nDashboard:")
+        for k, v in dash.items():
+            click.echo(f"  • {k}: {v}")
+
+
 if __name__ == "__main__":
     main()
