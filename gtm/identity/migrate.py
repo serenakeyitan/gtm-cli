@@ -25,29 +25,48 @@ def migrate_from_openclaw() -> list[str]:
     """Migrate all credentials from the old pipeline.
 
     Returns list of migrated identity names.
+
+    Discovers per-account session dirs by scanning OLD_SECRETS_DIR for any
+    directory named `reddit_session*` or `hn_session*`. Each is migrated as
+    a separate identity. Username is taken from the suffix after `_session_`,
+    or "openclaw_migrated" if none.
     """
     migrated = []
 
-    # Twitter cookies
+    # Twitter cookies (single file, single account)
     old_twitter = OLD_SECRETS_DIR / "twitter_cookies.json"
     if old_twitter.exists():
         name = _migrate_twitter(old_twitter)
         if name:
             migrated.append(name)
 
-    # Reddit session
-    old_reddit = OLD_SECRETS_DIR / "reddit_session" / "storage_state.json"
-    if old_reddit.exists():
-        name = _migrate_reddit(old_reddit)
-        if name:
-            migrated.append(name)
+    # Reddit sessions (one or more dirs: reddit_session, reddit_session_pale, ...)
+    if OLD_SECRETS_DIR.exists():
+        for d in sorted(OLD_SECRETS_DIR.iterdir()):
+            if not d.is_dir() or not d.name.startswith("reddit_session"):
+                continue
+            storage = d / "storage_state.json"
+            if not storage.exists():
+                continue
+            suffix = d.name.removeprefix("reddit_session").lstrip("_")
+            username = suffix or "openclaw_migrated"
+            name = _migrate_reddit(storage, username=username)
+            if name:
+                migrated.append(name)
 
-    # HN cookie
-    old_hn = OLD_SECRETS_DIR / "hn_session" / "hn_cookie.json"
-    if old_hn.exists():
-        name = _migrate_hn(old_hn)
-        if name:
-            migrated.append(name)
+    # HN sessions (same shape)
+    if OLD_SECRETS_DIR.exists():
+        for d in sorted(OLD_SECRETS_DIR.iterdir()):
+            if not d.is_dir() or not d.name.startswith("hn_session"):
+                continue
+            cookie = d / "hn_cookie.json"
+            if not cookie.exists():
+                continue
+            suffix = d.name.removeprefix("hn_session").lstrip("_")
+            username = suffix or "openclaw_migrated"
+            name = _migrate_hn(cookie, username=username)
+            if name:
+                migrated.append(name)
 
     return migrated
 
@@ -86,57 +105,55 @@ def _migrate_twitter(old_path: Path) -> str | None:
         return None
 
 
-def _migrate_reddit(old_path: Path) -> str | None:
-    """Migrate Reddit Playwright session."""
-    try:
-        username = "openclaw_migrated"
-        identity_dir = IDENTITIES_DIR / "reddit" / username
-        session_dir = identity_dir / "session"
-        session_dir.mkdir(parents=True, exist_ok=True)
+def _migrate_reddit(old_path: Path, username: str = "openclaw_migrated") -> str | None:
+    """Migrate Reddit Playwright session.
 
-        shutil.copy2(old_path, session_dir / "storage_state.json")
+    storage_state.json is placed directly under identity_dir (not session/), to
+    match what gtm.platforms.reddit.client.PlaywrightRedditClient reads.
+    """
+    try:
+        identity_dir = IDENTITIES_DIR / "reddit" / username
+        identity_dir.mkdir(parents=True, exist_ok=True)
+
+        shutil.copy2(old_path, identity_dir / "storage_state.json")
         _secure_dir(identity_dir)
-        _secure_dir(session_dir)
 
         Identity(
             name=f"reddit:{username}",
             platform="reddit",
             username=username,
             auth_method="browser",
-            notes="Migrated from openclaw pipeline",
+            notes=f"Migrated from openclaw pipeline ({old_path.parent.name})",
         ).save()
 
         log.info("Migrated Reddit session → reddit:%s", username)
         return f"reddit:{username}"
     except Exception as e:
-        log.error("Failed to migrate Reddit: %s", e)
+        log.error("Failed to migrate Reddit %s: %s", username, e)
         return None
 
 
-def _migrate_hn(old_path: Path) -> str | None:
-    """Migrate HN cookie."""
+def _migrate_hn(old_path: Path, username: str = "openclaw_migrated") -> str | None:
+    """Migrate HN cookie. Stored directly under identity_dir."""
     try:
-        username = "openclaw_migrated"
         identity_dir = IDENTITIES_DIR / "hn" / username
-        session_dir = identity_dir / "session"
-        session_dir.mkdir(parents=True, exist_ok=True)
+        identity_dir.mkdir(parents=True, exist_ok=True)
 
-        shutil.copy2(old_path, session_dir / "hn_cookie.json")
+        shutil.copy2(old_path, identity_dir / "hn_cookie.json")
         _secure_dir(identity_dir)
-        _secure_dir(session_dir)
 
         Identity(
             name=f"hn:{username}",
             platform="hn",
             username=username,
             auth_method="browser",
-            notes="Migrated from openclaw pipeline",
+            notes=f"Migrated from openclaw pipeline ({old_path.parent.name})",
         ).save()
 
         log.info("Migrated HN cookie → hn:%s", username)
         return f"hn:{username}"
     except Exception as e:
-        log.error("Failed to migrate HN: %s", e)
+        log.error("Failed to migrate HN %s: %s", username, e)
         return None
 
 
