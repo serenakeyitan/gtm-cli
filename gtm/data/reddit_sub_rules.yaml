@@ -1,0 +1,93 @@
+# Reddit per-subreddit posting rules.
+#
+# Reddit doesn't expose these via API — they're scraped from sidebar text + lived
+# experience. Edit by hand as you learn more (e.g. after a removal).
+#
+# Schema per sub:
+#   min_total_karma:   minimum total karma to attempt posting (null = no rule)
+#   min_link_karma:    minimum link karma (null = no rule)
+#   min_comment_karma: minimum comment karma (null = no rule)
+#   min_age_days:      minimum account age in days (null = no rule)
+#   notes:             free text — observed gotchas, what kind of post works
+#   permanent_skip:    true if we've been mod-removed and shouldn't retry from any account
+#
+# Verdict logic:
+#   FAIL       — at least one rule is violated
+#   BORDERLINE — passes by <= 20% margin on any rule (e.g. 110 karma when min is 100)
+#   PASS       — comfortably above all minimums
+
+subs:
+  # === Tested 2026-04-20 doc-drift batch ===
+  ClaudeAI:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Best-performing sub for first-tree (8 score, 20 comments). No karma gate observed. Self-promo tolerated if framed as 'sharing a thing I tried'."
+    permanent_skip: false
+
+  devtools:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Low traffic but tolerant. 'open to ideas' framing worked."
+    permanent_skip: false
+
+  coolgithubprojects:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Link-only sub. Title format: '[lang] Project: description'. Auto-removes self/text posts."
+    permanent_skip: false
+
+  LocalLLaMA:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Mod-removed our 4/20 post. Strict no-self-promo culture. Only post research/findings, never project announcements."
+    permanent_skip: true   # for first-tree announcement-style posts; revisit if angle changes
+
+  opensource:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Mod-removed our 4/20 post. Voice was too 'i built'. Could retry with neutral 'useful resource' framing."
+    permanent_skip: true   # for current voice; revisit with reframe
+
+  programming:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Mod-removed (not just automod) our 4/20 post. Self-promo intolerant. Only blog-post-quality essays land."
+    permanent_skip: true
+
+  # === Untested but on llm-wiki shortlist ===
+  AI_Agents:
+    min_total_karma: null
+    min_age_days: 30
+    notes: "Core ICP for first-tree. Allows project posts if useful for agent builders. Avoid 'launch'/'i made' headlines."
+    permanent_skip: false
+
+  LangChain:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Allows tool-sharing if framed as 'works with LangChain' or 'compared to <langchain feature>'. Pure announcements may be removed."
+    permanent_skip: false
+
+  ChatGPTCoding:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Cursor/Claude Code crowd. Karma rules loose. Open to agent-infra topics."
+    permanent_skip: false
+
+  AutoGenAI:
+    min_total_karma: null
+    min_age_days: null
+    notes: "Niche, ~10k. Microsoft AutoGen overlap. Fine for niche project shares."
+    permanent_skip: false
+
+  MachineLearning:
+    min_total_karma: 100
+    min_comment_karma: 100
+    min_age_days: 60
+    notes: "Strict. [D] Discussion or [R] Research only — no [P] Project posts unless paper-quality. One wrong tag = removal."
+    permanent_skip: false
+
+  singularity:
+    min_total_karma: 50
+    min_age_days: 60
+    notes: "Karma + age gate. 'AGI/futurist' framing required, technical hooks underperform."
+    permanent_skip: false
