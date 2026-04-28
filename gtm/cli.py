@@ -2459,5 +2459,235 @@ def post_draft(product, channel, direction_key, identity, kind_opt,
     click.echo(f"  id={post_id}  status=drafting  identity={identity or '(none)'}")
 
 
+# ── gtm post submit ──────────────────────────────────────────────────
+
+
+@post.command("submit")
+@click.argument("slug")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+@click.option("--dry-run", is_flag=True,
+              help="Run preflight + open browser pre-filled but DO NOT click Submit.")
+@click.option("--yes", is_flag=True,
+              help="Skip the confirm prompt. Required to proceed past a BORDERLINE preflight.")
+def post_submit(slug, launch_path, dry_run, yes):
+    """Preflight, confirm, and submit a drafted post for real.
+
+    Refuses if status != drafting. On success, writes live_url/live_id/posted_at
+    and bumps status=live. On failure, leaves status=drafting and writes a
+    note: "submit failed: <reason>".
+    """
+    from gtm.launch import LaunchDir, Post
+    from gtm.launch.submit import (
+        channel_platform, extract_live_id, mark_post_failed,
+        mark_post_live, parse_reddit_channel,
+    )
+
+    ld: LaunchDir = _resolve_launch_dir(launch_path)
+
+    # ── Locate the post by slug or id ───────────────────────────────
+    posts = Post.find_all(ld)
+    match = next((p for p in posts if p.slug == slug or p.id == slug), None)
+    if not match:
+        click.echo(
+            f"No post found with slug or id '{slug}' in {ld.path}.\n"
+            f"Hint: run `gtm post list --launch {ld.path}` to see available slugs.",
+            err=True,
+        )
+        sys.exit(1)
+
+    # ── Refuse if not drafting ──────────────────────────────────────
+    if match.status != "drafting":
+        click.echo(
+            f"Refusing to submit: post status is '{match.status}', not 'drafting'.\n"
+            f"  path: {match.path}\n"
+            f"  hint: only posts in 'drafting' state can be submitted.",
+            err=True,
+        )
+        sys.exit(1)
+
+    # ── Channel parsing ─────────────────────────────────────────────
+    plat = channel_platform(match.channel)
+    if plat != "reddit":
+        click.echo(
+            f"Refusing to submit: channel '{match.channel}' is platform '{plat}'.\n"
+            f"  TODO: gtm post submit supports reddit only for now. "
+            f"Twitter / HN / unknown channels are punted to a follow-up CP.",
+            err=True,
+        )
+        sys.exit(1)
+
+    sub = parse_reddit_channel(match.channel)
+    if not sub:
+        click.echo(
+            f"Refusing to submit: couldn't extract sub from channel '{match.channel}'. "
+            f"Expected something like 'reddit r/AI_Agents'.",
+            err=True,
+        )
+        sys.exit(1)
+
+    identity = match.identity
+    if not identity:
+        click.echo(
+            f"Refusing to submit: post has no `identity` set in frontmatter.\n"
+            f"  path: {match.path}\n"
+            f"  hint: edit the frontmatter or re-draft with --identity.",
+            err=True,
+        )
+        sys.exit(1)
+
+    kind = match.kind or "self"
+    title = str(match.frontmatter.get("title") or "").strip()
+    # Title isn't a frontmatter field per the schema — derive from slug if missing.
+    # Posts created via `gtm post draft` don't carry title in frontmatter; the
+    # body is the post body and the title was used to build the slug. We use
+    # the slug-suffix as a readable echo for the confirm prompt.
+    confirm_title = title or match.slug
+
+    # ── Preflight ───────────────────────────────────────────────────
+    from gtm.modules.preflight import preflight as preflight_fn, PreflightError
+
+    click.echo(f"Preflighting u/{identity} for r/{sub}…")
+    try:
+        result = preflight_fn(identity, sub)
+    except PreflightError as e:
+        click.echo(f"Preflight error: {e}", err=True)
+        click.echo(
+            "  hint: identity may not exist on Reddit, or network is unreachable.",
+            err=True,
+        )
+        sys.exit(2)
+
+    verdict = result.get("verdict", "FAIL")
+    reasons = result.get("reasons", [])
+    click.echo(f"Preflight verdict: {verdict}")
+    for r in reasons:
+        st = r.get("status", "?").upper()
+        click.echo(f"  [{st}] {r.get('detail', '')}")
+
+    if verdict == "FAIL":
+        click.echo("Aborting: preflight FAILED.", err=True)
+        sys.exit(1)
+    if verdict == "BORDERLINE" and not yes:
+        click.echo(
+            "Aborting: preflight is BORDERLINE — pass --yes to proceed.",
+            err=True,
+        )
+        sys.exit(1)
+
+    # ── Confirm ─────────────────────────────────────────────────────
+    if not yes:
+        if not click.confirm(
+            f'Submit "{confirm_title}" to r/{sub} from u/{identity}?',
+            default=False,
+        ):
+            click.echo("Cancelled.")
+            return
+
+    body_text = match.body.rstrip()
+
+    if dry_run:
+        click.echo(
+            f"[DRY RUN] Would submit kind={kind} to r/{sub} as u/{identity}. "
+            f"Skipping Playwright launch."
+        )
+        # Note: we deliberately do not open the browser in --dry-run. Opening
+        # without clicking is a nice-to-have but it forks Chrome and risks
+        # session conflicts. Visual confirmation is a real-run human gate.
+        return
+
+    # ── Resolve session dir (real submit only) ──────────────────────
+    from gtm.identity.session import session_dir_for_identity
+    try:
+        session_dir = session_dir_for_identity(identity, "reddit")
+    except Exception as e:
+        click.echo(f"Identity resolution failed: {e}", err=True)
+        click.echo(
+            "  hint: run `gtm auth reddit` to (re-)link this identity.",
+            err=True,
+        )
+        sys.exit(2)
+
+    # ── Dispatch by kind ────────────────────────────────────────────
+    from gtm.platforms.reddit.client import (
+        get_reddit_browser_client,
+    )
+
+    if kind == "self":
+        client = get_reddit_browser_client(session_dir)
+        try:
+            res = asyncio.run(
+                client.submit_post(sub, confirm_title, body_text)
+            )
+        except Exception as e:
+            new_fm = mark_post_failed(match.frontmatter, str(e))
+            Post(path=match.path, frontmatter=new_fm, body=match.body).save()
+            click.echo(f"Submit failed: {e}", err=True)
+            click.echo(
+                f"  Wrote note to {match.path} (status still 'drafting').",
+                err=True,
+            )
+            sys.exit(1)
+    elif kind == "image":
+        # Image submit requires the image path stored in frontmatter.
+        img_rel = match.frontmatter.get("image")
+        if not img_rel:
+            click.echo(
+                "Refusing to submit: kind=image but `image` field is missing "
+                "from frontmatter.",
+                err=True,
+            )
+            sys.exit(1)
+        # `image:` is stored relative to the product dir, e.g. posts/assets/foo.png
+        product_dir = match.path.parent.parent  # <launch>/<product>/
+        img_path = (product_dir / img_rel).resolve()
+        if not img_path.is_file():
+            click.echo(
+                f"Image file not found: {img_path} "
+                f"(frontmatter image: '{img_rel}')",
+                err=True,
+            )
+            sys.exit(1)
+        client = get_reddit_browser_client(session_dir)
+        try:
+            res = asyncio.run(
+                client.submit_image_post(sub, confirm_title, body_text, str(img_path))
+            )
+        except Exception as e:
+            new_fm = mark_post_failed(match.frontmatter, str(e))
+            Post(path=match.path, frontmatter=new_fm, body=match.body).save()
+            click.echo(f"Submit failed: {e}", err=True)
+            click.echo(
+                f"  Wrote note to {match.path} (status still 'drafting').",
+                err=True,
+            )
+            sys.exit(1)
+    elif kind == "link":
+        # TODO: implement link submit. The current
+        # `PlaywrightRedditClient.submit_post` is text-only; `submit_api_post`
+        # supports kind='link' but uses the OAuth API path (token_v2). We punt
+        # link kind to a follow-up CP rather than half-wire it here.
+        click.echo(
+            "Refusing to submit: kind=link is not implemented yet.\n"
+            "  TODO: wire link submit through PlaywrightRedditClient — current "
+            "submit_post supports text only. Coming in a follow-up CP.",
+            err=True,
+        )
+        raise NotImplementedError("link submit pending follow-up CP")
+    else:
+        click.echo(f"Refusing to submit: unknown kind '{kind}'", err=True)
+        sys.exit(1)
+
+    # ── Success — write back frontmatter ────────────────────────────
+    url = res.get("url", "")
+    live_id = res.get("post_id") or extract_live_id(url)
+    new_fm = mark_post_live(match.frontmatter, url=url, live_id=live_id)
+    Post(path=match.path, frontmatter=new_fm, body=match.body).save()
+    click.echo(f"\n✓ Posted: {url}")
+    click.echo(f"  live_id: {live_id}")
+    click.echo("  status:  live")
+    click.echo(f"  path:    {match.path}")
+
+
 if __name__ == "__main__":
     main()

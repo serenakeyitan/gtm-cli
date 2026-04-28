@@ -655,6 +655,197 @@ class PlaywrightRedditClient:
             "success": True,
         }
 
+    # ── Image posting (browser UI) ───────────────────────────────────
+
+    async def submit_image_post(
+        self,
+        subreddit: str,
+        title: str,
+        body: str,
+        image_path: str,
+    ) -> dict[str, Any]:
+        """Submit an image post to a subreddit via the browser.
+
+        Reddit's image submit page exposes a hidden ``<input type="file">`` —
+        we bypass any drag-drop / picker UI by calling ``set_input_files`` on
+        it directly. The optional body field is sometimes hidden behind a
+        "Add caption" toggle; we try a handful of common selectors and emit
+        a warning (don't fail) if it can't be filled.
+
+        Returns dict with: url, post_id, subreddit, title, success.
+        """
+        from pathlib import Path as _P
+        img = _P(image_path).expanduser().resolve()
+        if not img.is_file():
+            raise RedditPostError(f"Image not found: {img}")
+
+        await self.ensure_logged_in()
+        await self._throttle()
+
+        page = await self._context.new_page()
+        try:
+            submit_url = (
+                f"https://www.reddit.com/r/{subreddit}/submit/?type=IMAGE"
+            )
+            log.info("Navigating to %s", submit_url)
+            resp = await page.goto(
+                submit_url, wait_until="commit", timeout=30000,
+            )
+            await page.wait_for_timeout(6000)
+
+            log.info(
+                "Image submit page loaded (HTTP %s). Current URL: %s",
+                resp.status if resp else "?", page.url,
+            )
+
+            # ── Pre-flight checks ───────────────────────────────────
+            if "login" in page.url.lower():
+                raise RedditAuthError(
+                    f"Redirected to login on r/{subreddit}. Session may be expired."
+                )
+            body_text = (await page.text_content("body") or "").lower()
+            if "blocked by network security" in body_text:
+                raise RedditPostError(
+                    f"Reddit CDN blocked browser for r/{subreddit}. URL: {page.url}"
+                )
+            if "whoa there" in body_text or "too many requests" in body_text:
+                raise RedditRateLimitError(
+                    "Reddit rate limit detected on submit page"
+                )
+
+            # ── Upload image ────────────────────────────────────────
+            file_input = page.locator('input[type="file"]').first
+            try:
+                await file_input.wait_for(state="attached", timeout=10000)
+            except Exception:
+                raise RedditPostError(
+                    f"Image file input not found on r/{subreddit} submit page."
+                )
+            log.info("Uploading image: %s", img)
+            await file_input.set_input_files(str(img))
+            # Reddit needs a moment to process the upload + show the preview.
+            await page.wait_for_timeout(4000)
+
+            # ── Title ────────────────────────────────────────────────
+            title_selectors = [
+                'textarea[placeholder*="Title"]',
+                'textarea[placeholder*="title"]',
+                'input[aria-label*="Title"]',
+                'div[contenteditable="true"][aria-label*="Title"]',
+                'div[contenteditable="true"][aria-label*="title"]',
+                'shreddit-composer textarea',
+                'faceplate-textarea-input textarea',
+            ]
+            title_el = None
+            for sel in title_selectors:
+                loc = page.locator(sel).first
+                try:
+                    if await loc.is_visible(timeout=2000):
+                        title_el = loc
+                        log.info("Title input matched: %s", sel)
+                        break
+                except Exception:
+                    continue
+            if title_el is None:
+                ce_divs = page.locator('div[contenteditable="true"]')
+                if await ce_divs.count() > 0:
+                    title_el = ce_divs.first
+                    log.info("Title input: using first contenteditable")
+            if title_el is None:
+                raise RedditPostError(
+                    f"Title input not found on r/{subreddit} image submit page."
+                )
+            await title_el.click()
+            await page.wait_for_timeout(200)
+            await page.keyboard.type(title, delay=20)
+            await page.wait_for_timeout(500)
+
+            # ── Body (best-effort — image posts often hide it) ──────
+            body_filled = False
+            if body:
+                body_selectors = [
+                    'div[aria-label="Post body text field"]',
+                    'div[aria-label="Optional Body text field"]',
+                    'div[contenteditable="true"][role="textbox"]',
+                    'div[role="textbox"]',
+                    'textarea[placeholder*="Text"]',
+                    'textarea[aria-label*="body"]',
+                ]
+                for sel in body_selectors:
+                    loc = page.locator(sel).first
+                    try:
+                        if await loc.is_visible(timeout=1500):
+                            await loc.click()
+                            await page.wait_for_timeout(200)
+                            await page.keyboard.type(body, delay=10)
+                            body_filled = True
+                            log.info("Body matched selector: %s", sel)
+                            break
+                    except Exception:
+                        continue
+                # Fallback: 2nd contenteditable.
+                if not body_filled:
+                    ce_divs = page.locator('div[contenteditable="true"]')
+                    if await ce_divs.count() >= 2:
+                        try:
+                            await ce_divs.nth(1).click()
+                            await page.wait_for_timeout(200)
+                            await page.keyboard.type(body, delay=10)
+                            body_filled = True
+                            log.info("Body filled via second contenteditable")
+                        except Exception:
+                            pass
+                if not body_filled:
+                    log.warning(
+                        "Couldn't find body field on r/%s image submit — "
+                        "posting image with title only.",
+                        subreddit,
+                    )
+
+            # ── Submit ───────────────────────────────────────────────
+            post_btn = page.locator(
+                'button:has-text("Post"):not(:has-text("Repost")), '
+                'button[type="submit"]:has-text("Post"), '
+                'button#inner-post-submit-button'
+            )
+            try:
+                await post_btn.first.wait_for(state="visible", timeout=10000)
+            except Exception:
+                raise RedditPostError(
+                    f"Post button not found on r/{subreddit} image submit page."
+                )
+            for _ in range(30):  # image upload may take longer to enable button
+                if not await post_btn.first.is_disabled():
+                    break
+                await page.wait_for_timeout(500)
+            await post_btn.first.click(force=True)
+
+            try:
+                await page.wait_for_url("**/comments/**", timeout=20000)
+            except Exception:
+                await page.wait_for_timeout(5000)
+
+            post_url = page.url
+            post_id = self._extract_post_id(post_url)
+            log.info("Image-posted to r/%s: %s", subreddit, post_url)
+            return {
+                "url": post_url,
+                "post_id": post_id,
+                "subreddit": subreddit,
+                "title": title,
+                "kind": "image",
+                "success": True,
+            }
+
+        except (RedditPostError, RedditRateLimitError, RedditAuthError):
+            raise
+        except Exception as e:
+            raise RedditPostError(
+                f"Image submit failed for r/{subreddit}: {e}"
+            ) from e
+        finally:
+            await page.close()
+
     # ── API-based posting ────────────────────────────────────────────
 
     async def submit_api_post(
