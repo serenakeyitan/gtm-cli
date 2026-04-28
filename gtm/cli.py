@@ -2810,5 +2810,28 @@ def _fmt_delta(d: int) -> str:
     return str(d)
 
 
+@main.group()
+def dashboard():
+    """Dashboard — render the launch tracker HTML."""
+    pass
+
+
+@dashboard.command("build")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+@click.option("--out", "out_path", default=None,
+              help="Output HTML path (default: <launch_dir>/dashboard.html)")
+def dashboard_build(launch_path, out_path):
+    """Render <launch_dir>/dashboard.html from frontmatter + .gtm-launch.yaml."""
+    from gtm.launch.dashboard import write_dashboard
+
+    ld = _resolve_launch_dir(launch_path)
+    target, n = write_dashboard(
+        ld,
+        out_path=Path(out_path).expanduser().resolve() if out_path else None,
+    )
+    click.echo(f"wrote {n} bytes to {target}")
+
+
 if __name__ == "__main__":
     main()

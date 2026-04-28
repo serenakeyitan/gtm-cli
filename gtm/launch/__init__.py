@@ -9,6 +9,7 @@ from gtm.launch.post import Post, PostError
 from gtm.launch import draft  # re-export module for `from gtm.launch import draft`
 from gtm.launch import submit  # re-export module for `from gtm.launch import submit`
 from gtm.launch import sync  # re-export module for `from gtm.launch import sync`
+from gtm.launch import dashboard  # re-export module for `from gtm.launch import dashboard`
 
 __all__ = [
     "LaunchDir",
@@ -19,4 +20,5 @@ __all__ = [
     "draft",
     "submit",
     "sync",
+    "dashboard",
 ]
