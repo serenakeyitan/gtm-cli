@@ -67,6 +67,10 @@ gtm traction                      # Check engagement on posted content
 gtm reddit prefill --as <u> --sub <s> --title "..." --body-file <p>
                                   # Open submit page prefilled, human clicks Post
 gtm reddit submit ...             # Auto-submit (be careful: silent-success risk)
+gtm reddit engagement --dashboard <html>
+                                  # Refresh score/comments for live posts
+gtm reddit promote <draft_id> --url <permalink>
+                                  # Atomic draft→live: delete draft entry, add pN row
 ```
 
 ## Post lifecycle (dashboard contract)
