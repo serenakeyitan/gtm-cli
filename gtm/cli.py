@@ -1202,6 +1202,183 @@ def reddit_prefill(as_identity, sub, title, body_file, body):
         console.print("\n[dim]Closed.[/dim]")
 
 
+@reddit.command("engagement")
+@click.argument("urls", nargs=-1, required=False)
+@click.option("--dashboard", "dashboard_path",
+              type=click.Path(exists=True, dir_okay=False),
+              help="Path to a dashboard HTML file. Extracts all live post URLs, "
+                   "fetches engagement, writes score/comments back into the file.")
+@click.option("--json", "json_output", is_flag=True, help="Output JSON instead of table.")
+@click.option("--dry-run", is_flag=True,
+              help="With --dashboard: print what would change, don't write.")
+def reddit_engagement(urls, dashboard_path, json_output, dry_run):
+    """Fetch Reddit engagement (score + comment count) for one or more posts.
+
+    Three modes:
+
+    \b
+      gtm reddit engagement <url>...           # fetch and print
+      gtm reddit engagement --dashboard <path> # sync all live posts in file
+      gtm reddit engagement --dashboard <path> --dry-run  # show diff only
+
+    Dashboard mode looks for objects in the POSTS array shaped like
+    `{ id: 'pN', ..., url: '...', status: 'live', ... }` and writes
+    `score: N, comments: N,` fields into them. Idempotent.
+    """
+    from gtm.output.traction import fetch_reddit_engagement
+
+    if dashboard_path and urls:
+        raise click.UsageError("Use --dashboard OR positional URLs, not both.")
+    if not dashboard_path and not urls:
+        raise click.UsageError("Provide URL(s) or --dashboard <path>.")
+
+    if dashboard_path:
+        _sync_dashboard_engagement(Path(dashboard_path), dry_run=dry_run, json_output=json_output)
+        return
+
+    async def _fetch_all():
+        results = []
+        for u in urls:
+            r = await fetch_reddit_engagement(u)
+            results.append(r)
+        return results
+
+    results = asyncio.run(_fetch_all())
+    if json_output:
+        console.print(json.dumps(results, indent=2))
+        return
+    for r in results:
+        if "error" in r:
+            console.print(f"[red]ERROR[/red] {r.get('url')}: {r['error']}")
+        else:
+            console.print(f"  ↑{r['score']:4}  {r['comments']:3}c   {r['url']}")
+
+
+def _sync_dashboard_engagement(path: Path, *, dry_run: bool, json_output: bool):
+    """Refresh score/comments for every live post in a dashboard HTML file.
+
+    BUG FIX: previously, post entries were added without `score`/`comments`
+    fields, so the dashboard showed nothing for engagement. This command
+    adds the missing fields on first run, then keeps them current.
+    """
+    import re
+    from gtm.output.traction import fetch_reddit_engagement
+
+    src = path.read_text()
+    # Match each post block: { id: 'pN' ... }
+    pattern = re.compile(
+        r"(?P<head>id:\s*'(?P<pid>p\d+)'[\s\S]*?status:\s*'live'[\s\S]*?url:\s*'(?P<url>https?://[^']+)')",
+    )
+    # url might appear before status; try both orders
+    # Find each post block by its id marker. Each entry starts with
+    # `id: 'pN'` and ends right before the next `id: '...'` or `];`.
+    # We delimit by the wrapping `  {` / `  },` instead of trying to
+    # balance braces (the `draft` template literals contain `{`).
+    # Match any post ID (pN, dN, or arbitrary). The `status: 'live'`
+    # check below filters out drafts.
+    id_starts = list(re.finditer(r"^(\s*)id: '([a-zA-Z]\w*)',", src, flags=re.MULTILINE))
+    blocks = []
+    for i, m in enumerate(id_starts):
+        pid = m.group(2)
+        # only sync Reddit posts (other platforms TBD)
+        # The block opens with the line `  {` immediately above and closes
+        # at the matching `  },` at the same indent before the next entry.
+        # Find the opening `{` line: walk backwards from m.start()
+        head_start = src.rfind("{", 0, m.start())
+        if head_start < 0:
+            continue
+        # Find this entry's closing `},` — first occurrence of `^  },` after
+        # the id line (matches the indent of the entry).
+        indent = m.group(1)
+        close_re = re.compile(rf"^{re.escape(indent[:-2])}\}},?", flags=re.MULTILINE)
+        cm = close_re.search(src, m.end())
+        if not cm:
+            continue
+        block = src[head_start:cm.end()]
+        u = re.search(r"url: '(https?://[^']+)'", block)
+        st = re.search(r"status: '(\w+)'", block)
+        if not u or not st or st.group(1) != "live":
+            continue
+        if "reddit.com" not in u.group(1):
+            continue
+        cur_score = re.search(r"score: (\d+)", block)
+        cur_comments = re.search(r"comments: (\d+)", block)
+        blocks.append({
+            "pid": pid,
+            "url": u.group(1),
+            "span": (head_start, cm.end()),
+            "block": block,
+            "cur_score": int(cur_score.group(1)) if cur_score else None,
+            "cur_comments": int(cur_comments.group(1)) if cur_comments else None,
+        })
+
+    if not blocks:
+        console.print("[yellow]No live Reddit posts found in dashboard.[/yellow]")
+        return
+
+    async def _fetch_all():
+        out = []
+        for b in blocks:
+            r = await fetch_reddit_engagement(b["url"])
+            out.append((b, r))
+        return out
+
+    pairs = asyncio.run(_fetch_all())
+
+    diffs = []  # (pid, url, old_score, old_comments, new_score, new_comments, missing)
+    for b, r in pairs:
+        if "error" in r:
+            console.print(f"[red]ERROR[/red] {b['pid']}: {r['error']}")
+            continue
+        new_s, new_c = r["score"], r["comments"]
+        missing = b["cur_score"] is None or b["cur_comments"] is None
+        if missing or (b["cur_score"], b["cur_comments"]) != (new_s, new_c):
+            diffs.append((b, new_s, new_c, missing))
+
+    if json_output:
+        console.print(json.dumps([
+            {"pid": b["pid"], "url": b["url"],
+             "old": [b["cur_score"], b["cur_comments"]],
+             "new": [s, c], "missing": m}
+            for b, s, c, m in diffs
+        ], indent=2))
+    else:
+        if not diffs:
+            console.print("[green]All live posts already up to date.[/green]")
+        for b, s, c, missing in diffs:
+            tag = "[yellow]+ADD[/yellow]" if missing else "[cyan]UPDATE[/cyan]"
+            old = f"{b['cur_score']}/{b['cur_comments']}" if not missing else "—"
+            console.print(f"  {tag} {b['pid']}  {old}  →  {s}/{c}   {b['url']}")
+
+    if dry_run:
+        console.print("[dim](dry-run: no changes written)[/dim]")
+        return
+    if not diffs:
+        return
+
+    # Apply edits — work back-to-front to keep spans valid.
+    new_src = src
+    diffs_sorted = sorted(diffs, key=lambda x: x[0]["span"][0], reverse=True)
+    for b, s, c, missing in diffs_sorted:
+        block = b["block"]
+        if missing:
+            # Inject `score: N, comments: N,` on the line before `status: 'live'`.
+            new_block = re.sub(
+                r"(\s*)(status: 'live')",
+                lambda m: f"{m.group(1)}score: {s}, comments: {c}, {m.group(2)}",
+                block,
+                count=1,
+            )
+        else:
+            new_block = re.sub(r"score: \d+", f"score: {s}", block)
+            new_block = re.sub(r"comments: \d+", f"comments: {c}", new_block, count=1)
+        start, end = b["span"]
+        new_src = new_src[:start] + new_block + new_src[end:]
+
+    path.write_text(new_src)
+    console.print(f"[green]✓[/green] wrote {len(diffs)} update(s) to {path}")
+
+
 @reddit.command("preflight")
 @click.argument("sub")
 @click.option("--identity", required=True,
