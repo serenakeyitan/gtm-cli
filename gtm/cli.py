@@ -1379,6 +1379,188 @@ def _sync_dashboard_engagement(path: Path, *, dry_run: bool, json_output: bool):
     console.print(f"[green]✓[/green] wrote {len(diffs)} update(s) to {path}")
 
 
+@reddit.command("promote")
+@click.argument("draft_id")
+@click.option("--url", required=True, help="Reddit permalink the draft was posted to.")
+@click.option("--title", "live_title", default=None,
+              help="Live title if it differs from the draft (defaults to draft title).")
+@click.option("--dashboard", "dashboard_paths", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="Dashboard HTML file(s) to update. Pass once per file. "
+                   "Defaults to ~/atf-launch/dashboard.html and ~/atf-launch/dist/index.html "
+                   "if both exist.")
+@click.option("--pid", "explicit_pid", default=None,
+              help="Override the auto-generated pN id (rarely needed).")
+@click.option("--dry-run", is_flag=True, help="Show what would change, don't write.")
+def reddit_promote(draft_id, url, live_title, dashboard_paths, explicit_pid, dry_run):
+    """Promote a draft entry to a live pN row.
+
+    Permanently fixes the recurring 'shipped drafts left as paused' bug
+    by atomically: (1) finding the draft block by id, (2) appending a
+    new live pN block right after it (or before `];`), and (3) DELETING
+    the draft entry. The agent can't pick the wrong status by hand
+    because the operation is one command.
+
+    \b
+    Example:
+      gtm reddit promote d14 \\
+        --url https://www.reddit.com/r/foo/comments/abc/foo_bar/ \\
+        --title "live title that diverged from draft"
+
+    By default updates both ~/atf-launch/dashboard.html and
+    ~/atf-launch/dist/index.html if both exist. Pass --dashboard
+    explicitly to override.
+    """
+    from gtm.output.traction import fetch_reddit_engagement
+
+    # Resolve default dashboard paths
+    paths = [Path(p) for p in dashboard_paths] if dashboard_paths else []
+    if not paths:
+        for default in [Path.home() / "atf-launch" / "dashboard.html",
+                        Path.home() / "atf-launch" / "dist" / "index.html"]:
+            if default.exists():
+                paths.append(default)
+    if not paths:
+        raise click.UsageError(
+            "No dashboard file specified and no defaults found at "
+            "~/atf-launch/dashboard.html or ~/atf-launch/dist/index.html. "
+            "Pass --dashboard <path>."
+        )
+
+    # Fetch live engagement once (shared across files)
+    async def _fetch():
+        return await fetch_reddit_engagement(url)
+    eng = asyncio.run(_fetch())
+    if "error" in eng:
+        console.print(f"[yellow]Warning: could not fetch engagement: {eng['error']}[/yellow]")
+        score, comments = 0, 0
+    else:
+        score, comments = eng.get("score", 0), eng.get("comments", 0)
+
+    for path in paths:
+        _promote_one(path, draft_id, url, live_title, score, comments,
+                     explicit_pid, dry_run)
+
+
+def _promote_one(path: Path, draft_id: str, url: str, live_title,
+                 score: int, comments: int, explicit_pid, dry_run: bool):
+    """Atomic promote: find draft block, build pN block, replace+append."""
+    import re
+
+    src = path.read_text()
+
+    # Locate the draft block. Match `id: '<draft_id>',` at column-aligned indent.
+    # Block opens at the prior `{` and closes at the next `},` at same indent.
+    pat = re.compile(rf"^(\s*)id: '{re.escape(draft_id)}',", flags=re.MULTILINE)
+    m = pat.search(src)
+    if not m:
+        console.print(f"[red]ERROR[/red] {path}: draft '{draft_id}' not found")
+        return
+    indent = m.group(1)
+    head_start = src.rfind("{", 0, m.start())
+    if head_start < 0:
+        console.print(f"[red]ERROR[/red] {path}: malformed block for {draft_id}")
+        return
+    close_re = re.compile(rf"^{re.escape(indent[:-2])}\}},?", flags=re.MULTILINE)
+    cm = close_re.search(src, m.end())
+    if not cm:
+        console.print(f"[red]ERROR[/red] {path}: unclosed block for {draft_id}")
+        return
+    block = src[head_start:cm.end()]
+
+    # Extract draft fields needed for the pN row
+    def _g(p, default=""):
+        r = re.search(p, block)
+        return r.group(1) if r else default
+    product = _g(r"product: '([^']+)'")
+    direction = _g(r"direction: '([^']+)'")
+    date = _g(r"date: '([^']+)'")
+    channel = _g(r"channel: '([^']+)'")
+    account = _g(r"account: '([^']+)'")
+    kind = _g(r"kind: '([^']+)'", "self")
+    image = _g(r"image: '([^']+)'")
+    # Pull draft body for archival in pN row
+    draft_body_match = re.search(r"draft: `([\s\S]*?)`,\s*\n\s*\}", block)
+    draft_body = draft_body_match.group(1) if draft_body_match else ""
+    draft_title_match = re.search(r"title:\s*([^\n]+)", draft_body)
+    draft_title = draft_title_match.group(1).strip() if draft_title_match else ""
+
+    # Determine pN id
+    if explicit_pid:
+        new_pid = explicit_pid
+    else:
+        existing = [int(x) for x in re.findall(r"id: 'p(\d+)'", src)]
+        new_pid = f"p{(max(existing) + 1) if existing else 1}"
+
+    # Build the live pN block
+    fields = [
+        f"id: '{new_pid}', product: '{product}', direction: '{direction}',",
+        f"date: '{date}', channel: '{channel}', account: '{account}',",
+        f"url: '{url}',",
+        f"score: {score}, comments: {comments}, status: 'live', kind: '{kind}',",
+    ]
+    if image:
+        fields[-1] = fields[-1].rstrip(",") + f", image: '{image}',"
+
+    note_parts = [f"promoted from {draft_id}"]
+    if live_title and draft_title and live_title != draft_title:
+        note_parts.append(f'live title "{live_title}" (draft title was "{draft_title}")')
+    note = " · ".join(note_parts)
+    fields.append(f"note: {note!r},")
+
+    archival_draft = draft_body
+    if live_title and draft_title and live_title != draft_title:
+        archival_draft = (
+            f"title: {draft_title}\n[posted with title: \"{live_title}\"]\n\n"
+            + re.sub(r"^title:\s*[^\n]+\n*", "", draft_body, count=1)
+        )
+    fields.append(f"draft: `{archival_draft}`,")
+
+    body_indent = indent + "  "
+    new_block = (
+        indent + "{\n"
+        + "\n".join(body_indent + line for line in fields) + "\n"
+        + indent + "},"
+    )
+
+    # Replace the draft block with the new pN block. To keep ordering,
+    # the simplest move is: remove draft block, append pN block at the
+    # end of the POSTS array (just before `];`).
+    posts_close = re.search(r"^\];", src, flags=re.MULTILINE)
+    if not posts_close:
+        console.print(f"[red]ERROR[/red] {path}: couldn't find POSTS `];` terminator")
+        return
+
+    # Build new src
+    before_draft = src[:head_start]
+    after_draft = src[cm.end():]
+    # If draft was followed by a comma+newline, we removed both; clean up
+    # any leading "  ," that might remain
+    after_draft = re.sub(r"^\s*,\s*\n", "\n", after_draft)
+    src_minus_draft = before_draft + after_draft
+
+    # Now insert new_block right before the POSTS `];`. Find it again
+    # in the modified src.
+    posts_close_2 = re.search(r"^\];", src_minus_draft, flags=re.MULTILINE)
+    if not posts_close_2:
+        console.print(f"[red]ERROR[/red] {path}: couldn't re-find POSTS terminator")
+        return
+    insertion_point = posts_close_2.start()
+    # Walk back to insert after the last entry's `},`
+    new_src = (
+        src_minus_draft[:insertion_point]
+        + new_block + "\n"
+        + src_minus_draft[insertion_point:]
+    )
+
+    if dry_run:
+        console.print(f"[cyan]dry-run[/cyan] {path}: would delete {draft_id}, add {new_pid} ({score}/{comments}c)")
+        return
+
+    path.write_text(new_src)
+    console.print(f"[green]✓[/green] {path}: deleted {draft_id}, added {new_pid} ({score}↑/{comments}c)")
+
+
 @reddit.command("preflight")
 @click.argument("sub")
 @click.option("--identity", required=True,
