@@ -1141,6 +1141,67 @@ def reddit_submit(as_identity, sub, title, body, url, generate_prompt,
                           subreddit=sub, title=title, url=url))
 
 
+@reddit.command("prefill")
+@click.option("--as", "as_identity", required=True, help="Identity (reddit username) to use")
+@click.option("--sub", required=True, help="Subreddit name (no r/ prefix)")
+@click.option("--title", required=True, help="Post title")
+@click.option(
+    "--body-file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help="File containing post body. Use - for stdin.",
+)
+@click.option("--body", default="", help="Post body inline (alternative to --body-file)")
+def reddit_prefill(as_identity, sub, title, body_file, body):
+    """Open headed Chrome with a Reddit text-post form prefilled.
+
+    Does NOT click Post — you review and submit yourself. This avoids
+    silent-success bugs where the form submits but the post never
+    actually appears.
+
+    Example:
+
+      gtm reddit prefill --as Pale_Stand5217 --sub AI_Agents \\
+        --title "the AI OS has a missing layer" --body-file /tmp/body.md
+    """
+    from gtm.config import IDENTITIES_DIR
+    from gtm.platforms.reddit.client import PlaywrightRedditClient
+
+    if not body and not body_file:
+        raise click.UsageError("Provide --body or --body-file")
+    if body and body_file:
+        raise click.UsageError("Use --body or --body-file, not both")
+
+    if body_file == "-":
+        body_text = sys.stdin.read()
+    elif body_file:
+        body_text = Path(body_file).read_text()
+    else:
+        body_text = body
+
+    identity_dir = IDENTITIES_DIR / "reddit" / as_identity
+    if not identity_dir.exists():
+        raise click.UsageError(
+            f"No reddit identity at {identity_dir}. Run "
+            f"`gtm auth reddit --username {as_identity}` first."
+        )
+
+    console.print(f"[dim]Opening submit page for r/{sub} as u/{as_identity}...[/dim]")
+    console.print("[dim]Browser will stay open — click Post yourself, then Ctrl+C here.[/dim]")
+
+    client = PlaywrightRedditClient(session_dir=str(identity_dir))
+
+    async def run():
+        try:
+            await client.prefill_post(sub, title, body_text)
+        finally:
+            await client.close()
+
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        console.print("\n[dim]Closed.[/dim]")
+
+
 @reddit.command("preflight")
 @click.argument("sub")
 @click.option("--identity", required=True,
