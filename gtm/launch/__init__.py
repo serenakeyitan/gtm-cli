@@ -8,6 +8,7 @@ from gtm.launch.dir import LaunchDir, LAUNCH_MARKER, LaunchDirError
 from gtm.launch.post import Post, PostError
 from gtm.launch import draft  # re-export module for `from gtm.launch import draft`
 from gtm.launch import submit  # re-export module for `from gtm.launch import submit`
+from gtm.launch import sync  # re-export module for `from gtm.launch import sync`
 
 __all__ = [
     "LaunchDir",
@@ -17,4 +18,5 @@ __all__ = [
     "PostError",
     "draft",
     "submit",
+    "sync",
 ]

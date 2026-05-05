@@ -2848,5 +2848,126 @@ def post_submit(slug, launch_path, dry_run, yes):
     click.echo(f"  path:    {match.path}")
 
 
+@post.command("sync")
+@click.option("--slug", "slug", default=None,
+              help="Sync only this post (slug or id). Default: every live post.")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd).")
+@click.option("--all", "all_flag", is_flag=True,
+              help="Explicit opt-in to sync all live posts (the default when --slug omitted).")
+def post_sync(slug, launch_path, all_flag):
+    """Re-fetch score/comments from Reddit for live posts and update frontmatter.
+
+    For each live post: hits /comments/<live_id>.json, updates metrics
+    (score, comments, comments_real, last_checked), and flips status to
+    'removed' if Reddit took the post down.
+
+    Per-post failures (network, missing live_id) write a `note` to the
+    frontmatter and continue — the run as a whole exits 0 unless something
+    structural is wrong (bad slug, no posts).
+    """
+    from rich.console import Console
+    from rich.table import Table
+
+    from gtm.launch import LaunchDir, Post
+    from gtm.launch.sync import (
+        SyncFetchError, apply_sync_to_frontmatter, fetch_comments_json,
+        parse_listing, resolve_live_id,
+    )
+
+    ld: LaunchDir = _resolve_launch_dir(launch_path)
+    posts = Post.find_all(ld)
+
+    # ── Filter to live (or one slug) ────────────────────────────────
+    if slug:
+        match = next((p for p in posts if p.slug == slug or p.id == slug), None)
+        if not match:
+            click.echo(
+                f"No post found with slug or id '{slug}' in {ld.path}.\n"
+                f"Hint: run `gtm post list --launch {ld.path}` to see available slugs.",
+                err=True,
+            )
+            sys.exit(1)
+        targets = [match]
+    else:
+        targets = [p for p in posts if p.status == "live"]
+
+    if not targets:
+        click.echo(f"0 posts to sync in {ld.path}")
+        return
+
+    console = Console()
+    rows: list[tuple[str, str, str, str, str, str]] = []
+
+    for p in targets:
+        prev_score = p.score
+        prev_comments = p.comments
+        live_id = resolve_live_id(p.frontmatter)
+
+        if not live_id:
+            # Per-post failure: write a note, keep going.
+            new_fm = dict(p.frontmatter)
+            new_fm["note"] = "sync failed: no live_id (set live_id or url in frontmatter)"
+            try:
+                Post(path=p.path, frontmatter=new_fm, body=p.body).save()
+            except Exception:
+                pass
+            rows.append((p.id or "-", "-", "-", "-", "-", "no live_id"))
+            click.echo(f"  [{p.id or p.slug}] no live_id, skipped", err=True)
+            continue
+
+        try:
+            payload = fetch_comments_json(live_id)
+            result = parse_listing(payload, op_identity=p.identity)
+        except SyncFetchError as e:
+            new_fm = dict(p.frontmatter)
+            new_fm["note"] = f"sync failed: {e}"
+            try:
+                Post(path=p.path, frontmatter=new_fm, body=p.body).save()
+            except Exception:
+                pass
+            rows.append((p.id or "-", "-", "-", "-", "-", f"err: {e}"))
+            click.echo(f"  [{p.id or p.slug}] {e}", err=True)
+            continue
+
+        # Success path — write back metrics (and maybe status=removed).
+        result.live_id = live_id
+        new_fm = apply_sync_to_frontmatter(p.frontmatter, result)
+        Post(path=p.path, frontmatter=new_fm, body=p.body).save()
+
+        score_delta = result.score - prev_score
+        comments_delta = result.comments - prev_comments
+        sub = result.subreddit or "-"
+        verdict = "removed" if result.removed_by_category else "ok"
+        rows.append((
+            p.id or p.slug,
+            f"r/{sub}" if sub != "-" else "-",
+            f"{result.score} ({_fmt_delta(score_delta)})",
+            f"{result.comments} ({_fmt_delta(comments_delta)})",
+            str(result.comments_real),
+            verdict,
+        ))
+
+    # ── Print table summary ─────────────────────────────────────────
+    table = Table(title=f"Sync summary — {ld.path}", show_lines=False)
+    table.add_column("id", style="cyan", no_wrap=True)
+    table.add_column("sub")
+    table.add_column("score (Δ)", justify="right")
+    table.add_column("comments (Δ)", justify="right")
+    table.add_column("real", justify="right")
+    table.add_column("verdict")
+    for r in rows:
+        table.add_row(*r)
+    console.print(table)
+    console.print(f"\nSynced {len(targets)} post{'s' if len(targets) != 1 else ''}")
+
+
+def _fmt_delta(d: int) -> str:
+    """Render a numeric delta with sign: 0 → '+0', 5 → '+5', -3 → '-3'."""
+    if d >= 0:
+        return f"+{d}"
+    return str(d)
+
+
 if __name__ == "__main__":
     main()
