@@ -2460,5 +2460,163 @@ def post_status(slug, launch_path):
     click.echo(f"\nBody length: {len(match.body)} chars ({len(match.body.splitlines())} lines)")
 
 
+# ── gtm post draft ───────────────────────────────────────────────────
+
+
+@post.command("draft")
+@click.argument("product")
+@click.option("--channel", required=True,
+              help='Channel string, e.g. "reddit r/AI_Agents", "twitter", "hn"')
+@click.option("--direction", "direction_key", default=None,
+              help="Direction key (must match one in .gtm-launch.yaml)")
+@click.option("--identity", default=None,
+              help="Identity to post as. Defaults to the platform default in .gtm-launch.yaml")
+@click.option("--kind", "kind_opt", default=None,
+              type=click.Choice(["text", "self", "image", "link"]),
+              help="Post kind. 'text' is an alias for 'self'. Default: self.")
+@click.option("--image", "image_path", default=None, type=click.Path(),
+              help="Path to an image (required when --kind=image)")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+@click.option("--title", default=None,
+              help="Post title. With --noninteractive, skips the title prompt.")
+@click.option("--body-file", default=None, type=click.Path(),
+              help="Read body from this file. With --noninteractive, skips $EDITOR.")
+@click.option("--noninteractive", is_flag=True,
+              help="Skip all prompts. Requires --title and --body-file.")
+def post_draft(product, channel, direction_key, identity, kind_opt,
+               image_path, launch_path, title, body_file, noninteractive):
+    """Create a new draft post under <launch>/<product>/posts/<slug>.md."""
+    from gtm.launch import LaunchDir, Post
+    from gtm.launch.draft import (
+        BODY_TEMPLATE, build_frontmatter, build_slug, copy_image_into_assets,
+        find_unique_slug, infer_platform, next_post_id, strip_template_comment,
+    )
+
+    ld: LaunchDir = _resolve_launch_dir(launch_path)
+
+    # ── Validate product against config ─────────────────────────────
+    product_keys = [p.get("key") for p in ld.products]
+    if product not in product_keys:
+        click.echo(
+            f"Error: product '{product}' not in .gtm-launch.yaml products list.\n"
+            f"Known products: {', '.join(product_keys) or '(none)'}",
+            err=True,
+        )
+        sys.exit(1)
+
+    # ── Validate direction (if given) ───────────────────────────────
+    if direction_key:
+        direction_keys = [d.get("key") for d in ld.directions]
+        if direction_key not in direction_keys:
+            click.echo(
+                f"Error: direction '{direction_key}' not in .gtm-launch.yaml directions list.\n"
+                f"Known directions: {', '.join(direction_keys) or '(none)'}",
+                err=True,
+            )
+            sys.exit(1)
+
+    # ── Identity default from platform ──────────────────────────────
+    platform = infer_platform(channel)
+    if not identity:
+        identity = ld.default_identity_by_platform.get(platform)
+
+    # ── Kind default + alias ────────────────────────────────────────
+    kind = kind_opt or ("self" if noninteractive else None)
+
+    # ── Title ───────────────────────────────────────────────────────
+    if noninteractive:
+        if not title:
+            click.echo("Error: --noninteractive requires --title", err=True)
+            sys.exit(1)
+        if not body_file:
+            click.echo("Error: --noninteractive requires --body-file", err=True)
+            sys.exit(1)
+    else:
+        if not title:
+            title = click.prompt("Title").strip()
+        if not kind:
+            kind = click.prompt(
+                "Kind", default="self",
+                type=click.Choice(["text", "self", "image", "link"]),
+            )
+
+    # `text` is an alias for `self` (text-only post)
+    if kind == "text":
+        kind = "self"
+    if not kind:
+        kind = "self"
+
+    # ── Title length warning (Reddit hard cap: 300; soft cap: 75) ──
+    if len(title) > 75:
+        click.echo(
+            f"Warning: title is {len(title)} chars (>75). Reddit allows up to 300 "
+            "but shorter titles perform better.",
+            err=True,
+        )
+
+    # ── Image handling ──────────────────────────────────────────────
+    posts_dir = ld.path / product / "posts"
+    posts_dir.mkdir(parents=True, exist_ok=True)
+    assets_dir = posts_dir / "assets"
+
+    if kind == "image" and not image_path and not noninteractive:
+        image_path = click.prompt("Image path", type=click.Path(exists=True))
+
+    image_relpath = None
+    if kind == "image":
+        if not image_path:
+            click.echo("Error: --kind=image requires --image <path>", err=True)
+            sys.exit(1)
+        try:
+            dest = copy_image_into_assets(Path(image_path), assets_dir)
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+        # Store as a path relative to the product dir for portability
+        image_relpath = f"posts/assets/{dest.name}"
+
+    # ── Slug + collision check ──────────────────────────────────────
+    base_slug = build_slug(channel, title)
+    suggested = find_unique_slug(posts_dir, base_slug)
+    if suggested is not None:
+        click.echo(
+            f"Error: slug '{base_slug}.md' already exists in {posts_dir}.\n"
+            f"Suggestion: --title with a different phrasing, or rename the existing "
+            f"file. Next free suffix would be: {suggested}.md",
+            err=True,
+        )
+        sys.exit(1)
+    slug = base_slug
+
+    # ── Body ────────────────────────────────────────────────────────
+    if body_file:
+        body_text = Path(body_file).expanduser().read_text()
+    else:
+        edited = click.edit(BODY_TEMPLATE, extension=".md")
+        if edited is None:
+            # User aborted the editor — bail without writing anything
+            click.echo("Aborted: editor closed without saving.", err=True)
+            sys.exit(1)
+        body_text = edited
+    body_text = strip_template_comment(body_text).rstrip() + "\n"
+
+    # ── Compose + write ─────────────────────────────────────────────
+    post_id = next_post_id(posts_dir)
+    fm = build_frontmatter(
+        post_id=post_id,
+        product=product,
+        direction=direction_key,
+        channel=channel,
+        identity=identity,
+        kind=kind,
+        image_relpath=image_relpath,
+    )
+    out_path = posts_dir / f"{slug}.md"
+    Post(path=out_path, frontmatter=fm, body=body_text).save()
+    click.echo(f"Wrote draft: {out_path}")
+    click.echo(f"  id={post_id}  status=drafting  identity={identity or '(none)'}")
+
+
 if __name__ == "__main__":
     main()
