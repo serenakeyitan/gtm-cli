@@ -14,6 +14,10 @@ ok()  { echo "  ✓ $1"; PASS=$((PASS+1)); }
 bad() { echo "  ✗ $1"; FAIL=$((FAIL+1)); }
 
 PYRUN="uv run --quiet python"
+# Use absolute path to the venv binary so subshells that `cd` into temp
+# dirs don't lose uv's project context (which made `uv run gtm` fall
+# through to a non-project gtm).
+GTM="$REPO/.venv/bin/gtm"
 
 TMP="$(mktemp -d -t gtm-launch-cp7.XXXXXX)"
 trap 'rm -rf "$TMP"; pkill -P $$ 2>/dev/null || true' EXIT
@@ -94,13 +98,13 @@ $PYRUN -c "from gtm.launch import deploy; assert hasattr(deploy, 'build_plan')" 
 
 # ── [2] Help text mentions both new commands ─────────────────────────
 echo "[2] help text mentions serve + deploy"
-HELP="$(uv run --quiet gtm dashboard --help 2>&1)"
+HELP="$($GTM dashboard --help 2>&1)"
 echo "$HELP" | grep -q "serve" && ok "dashboard --help mentions serve" || bad "dashboard --help mentions serve"
 echo "$HELP" | grep -q "deploy" && ok "dashboard --help mentions deploy" || bad "dashboard --help mentions deploy"
 
 # ── [3] dry-run cloudflare prints expected wrangler command ──────────
 echo "[3] deploy --dry-run (cloudflare)"
-DRY_OUT="$(uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --dry-run 2>&1)"
+DRY_OUT="$($GTM dashboard deploy --launch "$LAUNCH" --dry-run 2>&1)"
 RC=$?
 if [ $RC -eq 0 ]; then
     echo "$DRY_OUT" | grep -q "wrangler pages deploy" \
@@ -122,7 +126,7 @@ echo "[4] dry-run staged dist/index.html"
 
 # ── [5] real deploy with mocked wrangler succeeds + parses URL ───────
 echo "[5] deploy --provider cloudflare (mocked)"
-DEPLOY_OUT="$(uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --provider cloudflare 2>&1)"
+DEPLOY_OUT="$($GTM dashboard deploy --launch "$LAUNCH" --provider cloudflare 2>&1)"
 RC=$?
 if [ $RC -eq 0 ]; then
     echo "$DEPLOY_OUT" | grep -q "wrangler-mock invoked" \
@@ -147,14 +151,14 @@ directions: []
 default_identity_by_platform: {}
 dashboard: {}
 YAML
-ERR_OUT="$(uv run --quiet gtm dashboard deploy --launch "$BADL" --provider cloudflare --dry-run 2>&1)"
+ERR_OUT="$($GTM dashboard deploy --launch "$BADL" --provider cloudflare --dry-run 2>&1)"
 RC=$?
 [ $RC -ne 0 ] && echo "$ERR_OUT" | grep -q "cloudflare_project" \
     && ok "missing cloudflare_project errors clearly" || bad "missing cloudflare_project errors clearly (rc=$RC, out=$ERR_OUT)"
 
 # ── [7] vercel dry-run prints expected vercel command ────────────────
 echo "[7] deploy --provider vercel --dry-run"
-VOUT="$(uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --provider vercel --dry-run 2>&1)"
+VOUT="$($GTM dashboard deploy --launch "$LAUNCH" --provider vercel --dry-run 2>&1)"
 RC=$?
 if [ $RC -eq 0 ]; then
     echo "$VOUT" | grep -q "vercel deploy" \
@@ -169,7 +173,7 @@ fi
 echo "[8] build is fresh on each deploy"
 # tweak: change product name in yaml, run dry-run, confirm dashboard reflects it
 sed -i.bak 's/tagline: Test product/tagline: TWEAKED-XYZ/' "$LAUNCH/.gtm-launch.yaml"
-uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --dry-run >/dev/null 2>&1
+$GTM dashboard deploy --launch "$LAUNCH" --dry-run >/dev/null 2>&1
 grep -q "TWEAKED-XYZ" "$LAUNCH/dashboard.html" \
     && ok "deploy rebuilds dashboard.html (tweak visible)" || bad "deploy rebuilds dashboard.html"
 grep -q "TWEAKED-XYZ" "$LAUNCH/dist/index.html" \
@@ -177,9 +181,9 @@ grep -q "TWEAKED-XYZ" "$LAUNCH/dist/index.html" \
 
 # ── [9] idempotent: deploy twice, both succeed ───────────────────────
 echo "[9] deploy idempotency"
-uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --provider cloudflare >/dev/null 2>&1
+$GTM dashboard deploy --launch "$LAUNCH" --provider cloudflare >/dev/null 2>&1
 RC1=$?
-uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --provider cloudflare >/dev/null 2>&1
+$GTM dashboard deploy --launch "$LAUNCH" --provider cloudflare >/dev/null 2>&1
 RC2=$?
 [ $RC1 -eq 0 ] && [ $RC2 -eq 0 ] && ok "deploy → deploy both succeed" \
     || bad "deploy → deploy both succeed (rc1=$RC1 rc2=$RC2)"
@@ -187,7 +191,7 @@ RC2=$?
 # ── [10] serve --port 0 starts and is reachable ──────────────────────
 echo "[10] serve --port 0 reachable"
 SERVE_LOG="$TMP/serve.log"
-uv run --quiet gtm dashboard serve --launch "$LAUNCH" --port 0 >"$SERVE_LOG" 2>&1 &
+$GTM dashboard serve --launch "$LAUNCH" --port 0 >"$SERVE_LOG" 2>&1 &
 SERVE_PID=$!
 # wait for the "serving at" line
 for i in 1 2 3 4 5 6 7 8 9 10; do
@@ -217,7 +221,7 @@ wait $SERVE_PID 2>/dev/null
 # ── [11] --launch flag works for serve too (no walk-up needed) ───────
 echo "[11] --launch flag on serve"
 SERVE_LOG2="$TMP/serve2.log"
-( cd /tmp && uv run --quiet gtm dashboard serve --launch "$LAUNCH" --port 0 >"$SERVE_LOG2" 2>&1 ) &
+( cd /tmp && $GTM dashboard serve --launch "$LAUNCH" --port 0 >"$SERVE_LOG2" 2>&1 ) &
 SP2=$!
 for i in 1 2 3 4 5 6 7 8 9 10; do
     if grep -q "serving at" "$SERVE_LOG2" 2>/dev/null; then break; fi
@@ -230,7 +234,7 @@ wait $SP2 2>/dev/null
 
 # ── [12] DeployConfigError on bogus provider override ────────────────
 echo "[12] bogus provider rejected by click"
-BOGUS="$(uv run --quiet gtm dashboard deploy --launch "$LAUNCH" --provider bogus --dry-run 2>&1)"
+BOGUS="$($GTM dashboard deploy --launch "$LAUNCH" --provider bogus --dry-run 2>&1)"
 RC=$?
 [ $RC -ne 0 ] && echo "$BOGUS" | grep -q -i "invalid" \
     && ok "click rejects --provider bogus" || bad "click rejects --provider bogus"
