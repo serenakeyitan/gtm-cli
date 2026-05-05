@@ -63,12 +63,12 @@ Just the existing fine-grained registry, exposed as typed tools:
 - **Sources** (5): `twitter/search`, `twitter/user_tweets`, `reddit/search`, `hn/search`, `hn/top_stories`
 - **Filters** (4 registered): `filter/engagement`, `filter/keyword`, `filter/deduplicate`, `filter/limit`. (`identity_affinity.py` exists but is not yet imported in `gtm/modules/filters/__init__.py` — wire-up is a one-line PR if needed.)
 - **Transforms** (4): `transform/rewrite`, `transform/extract_url`, `transform/platform_adapt`, `transform/summarize`
-- **Actions** (4): `twitter/post`, `twitter/engage` (handles like/retweet/reply), `reddit/submit`, `hn/submit`
+- **Actions** (5): `twitter/post`, `twitter/like`, `twitter/retweet`, `reddit/submit`, `hn/submit_link`. (`twitter/like` and `twitter/retweet` are separate Module subclasses living in `gtm/modules/actions/twitter_engage.py`.)
 - **Monitors** (1): `track/engagement`
 
-That's **18 tools**, each with a typed schema generated from `Module.param_schema`. No new "verb" wrappers. The agent picks the right primitive based on what its skill tells it.
+That's **19 platform/data tools**. Plus 4 control modules (`control/delay`, `control/jitter`, `control/for_each`, `control/condition`) and 1 LLM ranker (`agent/synthesize`) the agent will also call directly. Plus 7 legacy `agent/*` and 11 `strategy/*` modules, which are *callable* via the SDK but **the agent should not pick** — they're the prompt-wrapping layer Phase 5 deletes.
 
-Note: `SKILL.md` and `README.md` currently advertise `twitter/like` and `twitter/retweet` as separate modules, which is inaccurate — they're sub-actions inside `twitter/engage`. Phase 4's `SKILL.md` rewrite corrects this.
+Each module has a typed schema generated from `Module.param_schema`. No new "verb" wrappers. The agent picks the right primitive based on what its skill tells it.
 
 ### What lives in markdown (skills)
 
