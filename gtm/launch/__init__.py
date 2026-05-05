@@ -7,6 +7,7 @@ See docs/PLAN-launch-workflow.md for the full convention.
 from gtm.launch.dir import LaunchDir, LAUNCH_MARKER, LaunchDirError
 from gtm.launch.post import Post, PostError
 from gtm.launch import draft  # re-export module for `from gtm.launch import draft`
+from gtm.launch import submit  # re-export module for `from gtm.launch import submit`
 
 __all__ = [
     "LaunchDir",
@@ -15,4 +16,5 @@ __all__ = [
     "Post",
     "PostError",
     "draft",
+    "submit",
 ]
