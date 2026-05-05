@@ -1188,7 +1188,19 @@ def reddit_prefill(as_identity, sub, title, body_file, body):
     console.print(f"[dim]Opening submit page for r/{sub} as u/{as_identity}...[/dim]")
     console.print("[dim]Browser will stay open — click Post yourself, then Ctrl+C here.[/dim]")
 
-    client = PlaywrightRedditClient(session_dir=str(identity_dir))
+    # Canonical session location is `<identity>/session/storage_state.json`,
+    # matching `gtm auth reddit` and the RedditPlatform.post path. Older
+    # installs may have a flat `<identity>/storage_state.json` from earlier
+    # auth runs — migrate it transparently so prefill keeps working.
+    session_dir = identity_dir / "session"
+    flat_storage = identity_dir / "storage_state.json"
+    nested_storage = session_dir / "storage_state.json"
+    if flat_storage.exists() and not nested_storage.exists():
+        session_dir.mkdir(parents=True, exist_ok=True)
+        flat_storage.rename(nested_storage)
+        console.print(f"[dim]migrated session: {flat_storage} → {nested_storage}[/dim]")
+
+    client = PlaywrightRedditClient(session_dir=str(session_dir))
 
     async def run():
         try:
