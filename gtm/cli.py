@@ -2335,5 +2335,130 @@ def launch_info(launch_path):
             click.echo(f"  • {k}: {v}")
 
 
+@main.group()
+def post():
+    """Post lifecycle — list, status, (later) draft / submit / sync."""
+    pass
+
+
+def _format_relative(iso_ts: str | None) -> str:
+    """Render an ISO timestamp as a coarse relative string (e.g. '3h', '2d').
+
+    Empty / unparseable inputs return '-'. This is dashboard-grade rough, not
+    a full humanize lib.
+    """
+    if not iso_ts:
+        return "-"
+    from datetime import datetime, timezone
+    try:
+        # Tolerate 'Z' suffix
+        ts = iso_ts.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - dt
+    except (ValueError, TypeError):
+        return iso_ts
+    secs = int(delta.total_seconds())
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        return f"{secs // 60}m"
+    if secs < 86400:
+        return f"{secs // 3600}h"
+    return f"{secs // 86400}d"
+
+
+@post.command("list")
+@click.option("--product", "product_filter", default=None,
+              help="Filter to one product key")
+@click.option("--status", "status_filter", default=None,
+              help="Filter to one status (drafting|scheduled|live|removed)")
+@click.option("--direction", "direction_filter", default=None,
+              help="Filter to one direction key (matches frontmatter `direction`)")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+def post_list(product_filter, status_filter, direction_filter, launch_path):
+    """Tabulate every post under the launch dir, newest first."""
+    from rich.console import Console
+    from rich.table import Table
+
+    from gtm.launch import Post
+
+    ld = _resolve_launch_dir(launch_path)
+    posts = Post.find_all(ld)
+
+    if product_filter:
+        posts = [p for p in posts if p.product == product_filter]
+    if status_filter:
+        posts = [p for p in posts if p.status == status_filter]
+    if direction_filter:
+        posts = [p for p in posts if p.direction == direction_filter]
+
+    console = Console()
+    if not posts:
+        console.print(f"0 posts in {ld.path}")
+        return
+
+    table = Table(title=f"Posts in {ld.path}", show_lines=False)
+    table.add_column("id", style="cyan", no_wrap=True)
+    table.add_column("product")
+    table.add_column("direction")
+    table.add_column("channel")
+    table.add_column("identity")
+    table.add_column("status")
+    table.add_column("score", justify="right")
+    table.add_column("comments", justify="right")
+    table.add_column("posted_at")
+
+    for p in posts:
+        table.add_row(
+            p.id or "-",
+            p.product or "-",
+            p.direction or "-",
+            p.channel or "-",
+            p.identity or "-",
+            p.status or "-",
+            str(p.score),
+            str(p.comments),
+            _format_relative(p.posted_at),
+        )
+
+    console.print(table)
+    console.print(f"\n{len(posts)} post{'s' if len(posts) != 1 else ''}")
+
+
+@post.command("status")
+@click.argument("slug")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+def post_status(slug, launch_path):
+    """Print one post's full frontmatter + body length."""
+    from gtm.launch import Post
+
+    ld = _resolve_launch_dir(launch_path)
+    posts = Post.find_all(ld)
+    match = next((p for p in posts if p.slug == slug or p.id == slug), None)
+    if not match:
+        click.echo(
+            f"No post found with slug or id '{slug}' in {ld.path}.\n"
+            f"Hint: run `gtm post list --launch {ld.path}` to see available slugs.",
+            err=True,
+        )
+        sys.exit(1)
+
+    click.echo(f"Post: {match.path}")
+    click.echo(f"Slug: {match.slug}")
+    click.echo("\nFrontmatter:")
+    for k, v in match.frontmatter.items():
+        if isinstance(v, dict):
+            click.echo(f"  {k}:")
+            for kk, vv in v.items():
+                click.echo(f"    {kk}: {vv}")
+        else:
+            click.echo(f"  {k}: {v}")
+    click.echo(f"\nBody length: {len(match.body)} chars ({len(match.body.splitlines())} lines)")
+
+
 if __name__ == "__main__":
     main()
