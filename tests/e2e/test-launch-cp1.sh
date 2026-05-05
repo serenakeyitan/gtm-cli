@@ -20,7 +20,10 @@ check() {
 }
 
 PYRUN="uv run --quiet python"
-GTM="uv run --quiet gtm"
+# Use absolute path to the venv binary so subshells that `cd` into temp
+# dirs don't lose uv's project context (which made `uv run gtm` fall
+# through to a non-project gtm and report `No such command 'launch'`).
+GTM="$REPO/.venv/bin/gtm"
 
 TMP="$(mktemp -d -t gtm-launch-cp1.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
