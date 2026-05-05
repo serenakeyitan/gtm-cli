@@ -321,6 +321,125 @@ class PlaywrightRedditClient:
 
     # ── Posting ──────────────────────────────────────────────────────
 
+    async def prefill_post(
+        self,
+        subreddit: str,
+        title: str,
+        selftext: str,
+    ) -> None:
+        """Open the submit page in headed Chrome with title + body prefilled,
+        then park indefinitely so the user can review and click Post manually.
+
+        This is the safer counterpart to ``submit_post``: it never clicks the
+        post button, so silent-success bugs (form submitted but post not
+        actually created) cannot happen — the human owns the final click.
+
+        Caller is responsible for the asyncio task lifecycle. The method
+        returns when the user closes the browser or sends KeyboardInterrupt.
+        """
+        await self.ensure_logged_in()
+        await self._throttle()
+
+        page = await self._context.new_page()
+        submit_url = f"https://www.reddit.com/r/{subreddit}/submit/?type=TEXT"
+        log.info("prefill: navigating to %s", submit_url)
+        await page.goto(submit_url, wait_until="commit", timeout=30000)
+        await page.wait_for_timeout(6000)
+
+        # ── Switch to Text post type ─────────────────────────────────
+        text_tab_selectors = [
+            'button[role="tab"]:has-text("Text")',
+            'a[role="tab"]:has-text("Text")',
+            'button:has-text("Text")',
+            'li:has-text("Text") a',
+            'li:has-text("Text") button',
+        ]
+        for sel in text_tab_selectors:
+            loc = page.locator(sel).first
+            try:
+                if await loc.is_visible(timeout=2000):
+                    await loc.click()
+                    await page.wait_for_timeout(1000)
+                    break
+            except Exception:
+                continue
+
+        # ── Title ─────────────────────────────────────────────────────
+        title_selectors = [
+            'textarea[placeholder*="Title"]',
+            'textarea[placeholder*="title"]',
+            'input[aria-label*="Title"]',
+            'div[contenteditable="true"][aria-label*="Title"]',
+            'shreddit-composer textarea',
+            'faceplate-textarea-input textarea',
+        ]
+        title_el = None
+        for sel in title_selectors:
+            loc = page.locator(sel).first
+            try:
+                if await loc.is_visible(timeout=2000):
+                    title_el = loc
+                    break
+            except Exception:
+                continue
+        if title_el is None:
+            ce_divs = page.locator('div[contenteditable="true"]')
+            if await ce_divs.count() > 0:
+                title_el = ce_divs.first
+        if title_el is not None:
+            await title_el.click()
+            await page.wait_for_timeout(200)
+            await page.keyboard.type(title, delay=20)
+            await page.wait_for_timeout(300)
+            log.info("prefill: title filled")
+        else:
+            log.warning("prefill: title input not found — paste manually")
+
+        # ── Body ──────────────────────────────────────────────────────
+        body_selectors = [
+            'div[aria-label="Post body text field"]',
+            'div[aria-label="Optional Body text field"]',
+            'div[contenteditable="true"][role="textbox"]',
+            'div[role="textbox"]',
+            'textarea[placeholder*="Text"]',
+        ]
+        body_el = None
+        for sel in body_selectors:
+            loc = page.locator(sel).first
+            try:
+                if await loc.is_visible(timeout=2000):
+                    body_el = loc
+                    break
+            except Exception:
+                continue
+        if body_el is None:
+            ce_divs = page.locator('div[contenteditable="true"]')
+            if await ce_divs.count() >= 2:
+                body_el = ce_divs.nth(1)
+        if body_el is not None:
+            await body_el.click()
+            await page.wait_for_timeout(200)
+            await page.keyboard.type(selftext, delay=10)
+            log.info("prefill: body filled")
+        else:
+            log.warning("prefill: body input not found — paste manually")
+
+        log.info(
+            "prefill: form ready on r/%s. Browser is open — review and "
+            "click Post yourself. Send Ctrl+C when done.",
+            subreddit,
+        )
+
+        # Park forever; caller kills via KeyboardInterrupt.
+        try:
+            while True:
+                await asyncio.sleep(60)
+                if page.is_closed():
+                    log.info("prefill: page was closed by user")
+                    break
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            log.info("prefill: cancelled by user")
+
     async def submit_post(
         self,
         subreddit: str,

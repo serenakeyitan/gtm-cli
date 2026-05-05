@@ -64,4 +64,25 @@ gtm modules list                  # Browse composable modules
 gtm run <strategy> --dry-run      # Preview without executing
 gtm run <strategy> --json         # Machine-readable output
 gtm traction                      # Check engagement on posted content
+gtm reddit prefill --as <u> --sub <s> --title "..." --body-file <p>
+                                  # Open submit page prefilled, human clicks Post
+gtm reddit submit ...             # Auto-submit (be careful: silent-success risk)
+gtm reddit engagement --dashboard <html>
+                                  # Refresh score/comments for live posts
+gtm reddit promote <draft_id> --url <permalink>
+                                  # Atomic draft→live: delete draft entry, add pN row
 ```
+
+## Post lifecycle (dashboard contract)
+
+When a tracking dashboard (e.g. `atf-launch`) is involved, posts move through these statuses. `paused` is reserved for the human — never set it from automation.
+
+| status | meaning | who sets it |
+|---|---|---|
+| `drafting` | active queue — 100% intended to ship | agent |
+| `paused` | human waitlist (skip / hold / reconsider) | **human only** |
+| `scheduled` / `planned` | future, not yet drafted | either |
+| `live` | posted; canonical row carries permalink + engagement | agent |
+| `removed` | killed by mods | agent |
+
+**When a draft ships:** delete the draft entry. Do **not** re-tag it as `paused` — the corresponding `pN` `live` row is the source of truth. Re-tagging shipped drafts as paused conflates "human held this back" with "this already shipped" and loses the human-intent signal.
