@@ -540,12 +540,16 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
 ]
+mcp = [
+    { name = "mcp" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "claude-agent-sdk", marker = "extra == 'agents'", specifier = ">=0.1.40" },
     { name = "click", specifier = ">=8.0" },
     { name = "httpx", specifier = ">=0.25" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.0" },
     { name = "playwright", specifier = ">=1.40" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21" },
@@ -554,7 +558,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0" },
     { name = "twikit", git = "https://codeberg.org/phin/twikit" },
 ]
-provides-extras = ["dev", "agents"]
+provides-extras = ["dev", "agents", "mcp"]
 
 [[package]]
 name = "h11"

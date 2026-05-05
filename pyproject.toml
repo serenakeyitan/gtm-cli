@@ -41,6 +41,9 @@ dev = [
 agents = [
     "claude-agent-sdk>=0.1.40",
 ]
+mcp = [
+    "mcp>=1.0",
+]
 
 [project.scripts]
 gtm = "gtm.cli:main"

@@ -3760,5 +3760,39 @@ def dashboard_deploy(provider, launch_path, dry_run):
         click.echo("\ndeployed (no URL parsed from output)")
 
 
+# ── MCP Server ────────────────────────────────────────────────────────
+
+
+@main.group()
+def mcp():
+    """Model Context Protocol — expose gtm as typed tools to agents."""
+    pass
+
+
+@mcp.command("serve")
+def mcp_serve():
+    """Run the gtm MCP server over stdio.
+
+    Wire this into a Claude Code project's `.mcp.json` to give the agent
+    typed access to all gtm modules:
+
+        {
+          "mcpServers": {
+            "gtm": { "command": "gtm", "args": ["mcp", "serve"] }
+          }
+        }
+
+    See docs/mcp-quickstart.md for details.
+    """
+    _ensure_platforms_registered()
+    try:
+        from gtm.mcp_server import serve_stdio
+    except ImportError as e:
+        console.print(f"[red]MCP server unavailable:[/red] {e}")
+        console.print("Install with: [bold]pip install 'gtm-cli[mcp]'[/bold]")
+        sys.exit(1)
+    asyncio.run(serve_stdio())
+
+
 if __name__ == "__main__":
     main()
