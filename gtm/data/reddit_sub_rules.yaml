@@ -97,3 +97,22 @@ subs:
     min_age_days: 60
     notes: "Karma + age gate. 'AGI/futurist' framing required, technical hooks underperform."
     permanent_skip: false
+
+  # === Researched 2026-04-28 for ai-os/ai-employee batch ===
+  cursor:
+    min_total_karma: null
+    min_age_days: null
+    notes: "10% self-promo rule (no more than 10% of cross-Reddit activity self-promotional). Flair REQUIRED. 'No slop' rule auto-removes low-effort/AI-generated posts and quick screenshots. Must tie to Cursor specifically — generic 'tool for agents' = removal. No promoting competing products."
+    permanent_skip: false
+
+  OpenSourceAI:
+    min_total_karma: null
+    min_age_days: null
+    notes: "17.5k subs. Welcomes model releases, fine-tuning, inference, agents, benchmarks. Tool MUST be open-source (open weights/data/tooling). Closed SaaS = off-topic. No flair required. No formal self-promo limits in API."
+    permanent_skip: false
+
+  agi:
+    min_total_karma: null
+    min_age_days: null
+    notes: "109k. No published rules (empty rules array via API). Audience is AGI theory / neuroscience / futurism — NOT dev tooling. Tool-launch posts will be downvoted as off-topic even if not removed. Use only for conceptual/theoretical framings."
+    permanent_skip: false

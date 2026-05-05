@@ -1334,6 +1334,51 @@ def _log_post_to_dashboard(path: Path, *, url: str, product: str, direction: str
     console.print(f"[green]✓[/green] {path}: added {new_pid} ({score}↑/{comments}c)")
 
 
+@reddit.command("fetch-sub-rules")
+@click.argument("sub")
+@click.option("--force", is_flag=True, help="Refetch even if cached entry is fresh")
+@click.option("--max-age-days", default=30, type=int,
+              help="Refetch if last_fetched is older than this (default: 30)")
+@click.option("--json", "json_output", is_flag=True)
+def reddit_fetch_sub_rules(sub, force, max_age_days, json_output):
+    """Fetch a subreddit's rules + meta from reddit and merge into the YAML.
+
+    Auto-fetched entries get source='auto'. Manually curated entries
+    (no source field, or source='manual') are preserved — only last_fetched
+    + auto-only fields are updated.
+
+    Exit codes: 0 = ok; 2 = fetch failed.
+    """
+    from gtm.modules.sub_rules_fetcher import ensure_sub_rule, FetchError
+
+    try:
+        result = ensure_sub_rule(sub, force=force, max_age_days=max_age_days)
+    except FetchError as e:
+        if json_output:
+            click.echo(json.dumps({"error": str(e)}))
+        else:
+            console.print(f"[red]fetch error:[/red] {e}")
+        sys.exit(2)
+
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        action = result["action"]
+        entry = result["entry"] or {}
+        click.echo(f"r/{result['sub']}: {action}")
+        if entry:
+            click.echo(f"  source:        {entry.get('source', 'manual')}")
+            click.echo(f"  last_fetched:  {entry.get('last_fetched', '(none)')}")
+            click.echo(f"  subscribers:   {entry.get('subscribers', '?')}")
+            click.echo(f"  submission:    {entry.get('submission_type', 'any')}")
+            if entry.get("flair_required_auto"):
+                click.echo("  flair:         REQUIRED (auto-detected)")
+            if entry.get("permanent_skip"):
+                click.echo("  permanent_skip: true")
+            if entry.get("notes"):
+                click.echo(f"  notes:         {entry['notes']}")
+
+
 # ── HN Commands ───────────────────────────────────────────────────────
 
 
