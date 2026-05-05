@@ -1538,7 +1538,14 @@ def _promote_one(path: Path, draft_id: str, url: str, live_title,
     # Replace the draft block with the new pN block. To keep ordering,
     # the simplest move is: remove draft block, append pN block at the
     # end of the POSTS array (just before `];`).
-    posts_close = re.search(r"^\];", src, flags=re.MULTILINE)
+    # Anchor to `const POSTS = [` first — files have multiple top-level
+    # arrays (DIRECTIONS, PRODUCTS, POSTS, TODOS) and the first `^];`
+    # belongs to DIRECTIONS. See https://github.com/serenakeyitan/gtm-cli/issues/17
+    posts_open = re.search(r"^const POSTS\s*=\s*\[", src, flags=re.MULTILINE)
+    if not posts_open:
+        console.print(f"[red]ERROR[/red] {path}: couldn't find `const POSTS = [` declaration")
+        return
+    posts_close = re.search(r"^\];", src[posts_open.end():], flags=re.MULTILINE)
     if not posts_close:
         console.print(f"[red]ERROR[/red] {path}: couldn't find POSTS `];` terminator")
         return
@@ -1552,12 +1559,16 @@ def _promote_one(path: Path, draft_id: str, url: str, live_title,
     src_minus_draft = before_draft + after_draft
 
     # Now insert new_block right before the POSTS `];`. Find it again
-    # in the modified src.
-    posts_close_2 = re.search(r"^\];", src_minus_draft, flags=re.MULTILINE)
+    # in the modified src — anchor to POSTS array specifically.
+    posts_open_2 = re.search(r"^const POSTS\s*=\s*\[", src_minus_draft, flags=re.MULTILINE)
+    if not posts_open_2:
+        console.print(f"[red]ERROR[/red] {path}: couldn't re-find POSTS declaration")
+        return
+    posts_close_2 = re.search(r"^\];", src_minus_draft[posts_open_2.end():], flags=re.MULTILINE)
     if not posts_close_2:
         console.print(f"[red]ERROR[/red] {path}: couldn't re-find POSTS terminator")
         return
-    insertion_point = posts_close_2.start()
+    insertion_point = posts_open_2.end() + posts_close_2.start()
     # Walk back to insert after the last entry's `},`
     new_src = (
         src_minus_draft[:insertion_point]
@@ -1810,14 +1821,22 @@ def _log_post_to_dashboard(path: Path, *, url: str, product: str, direction: str
     if note:
         fields.append(f"note: {note!r},")
 
-    # Find POSTS terminator (top-level `^];` after a `const POSTS = [`)
-    posts_close = re.search(r"^\];", src, flags=re.MULTILINE)
+    # Find POSTS array specifically. Files like atf-launch/dashboard.html
+    # have multiple top-level arrays (DIRECTIONS, PRODUCTS, POSTS, TODOS),
+    # each closing with `^];`. Anchoring on the first `^];` accidentally
+    # injects new rows into DIRECTIONS — see https://github.com/serenakeyitan/gtm-cli/issues/17
+    posts_open = re.search(r"^const POSTS\s*=\s*\[", src, flags=re.MULTILINE)
+    if not posts_open:
+        console.print(f"[red]ERROR[/red] {path}: couldn't find `const POSTS = [` declaration")
+        return
+    posts_close = re.search(r"^\];", src[posts_open.end():], flags=re.MULTILINE)
     if not posts_close:
         console.print(f"[red]ERROR[/red] {path}: couldn't find POSTS `];` terminator")
         return
+    close_abs = posts_open.end() + posts_close.start()
 
     # Match indent of last entry by walking back from `];`
-    tail = src[:posts_close.start()].rstrip()
+    tail = src[:close_abs].rstrip()
     indent_match = re.search(r"\n(\s+)\},\s*$", tail)
     indent = indent_match.group(1) if indent_match else "  "
     body_indent = indent + "  "
@@ -1831,7 +1850,7 @@ def _log_post_to_dashboard(path: Path, *, url: str, product: str, direction: str
         console.print(f"[cyan]dry-run[/cyan] {path}: would add {new_pid} ({score}↑/{comments}c, r/{channel.split('r/')[-1]})")
         return
 
-    new_src = src[:posts_close.start()] + new_block + src[posts_close.start():]
+    new_src = src[:close_abs] + new_block + src[close_abs:]
     path.write_text(new_src)
     console.print(f"[green]✓[/green] {path}: added {new_pid} ({score}↑/{comments}c)")
 
