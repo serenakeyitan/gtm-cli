@@ -1175,6 +1175,165 @@ def reddit_preflight(sub, identity, json_output):
         sys.exit(1)
 
 
+@reddit.command("log")
+@click.argument("url")
+@click.option("--as", "as_identity", required=True,
+              help="Reddit username that posted (e.g. Pale_Stand5217)")
+@click.option("--product", required=True,
+              help="Product tag for the dashboard row (e.g. first-tree)")
+@click.option("--direction", required=True,
+              help="Campaign direction tag (e.g. github-scan-menubar)")
+@click.option("--note", default="",
+              help="Free-form note for the dashboard row")
+@click.option("--kind", default="self", type=click.Choice(["self", "image", "link"]),
+              help="Post kind (default: self)")
+@click.option("--image", default="",
+              help="Image path for kind=image rows (relative to dashboard)")
+@click.option("--dashboard", "dashboard_paths", multiple=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="Dashboard HTML file(s) to update. Defaults to "
+                   "~/atf-launch/dashboard.html and ~/atf-launch/dist/index.html "
+                   "if they exist.")
+@click.option("--pid", "explicit_pid", default=None,
+              help="Override the auto-generated pN id (rarely needed).")
+@click.option("--dry-run", is_flag=True, help="Show what would change, don't write.")
+def reddit_log(url, as_identity, product, direction, note, kind, image,
+               dashboard_paths, explicit_pid, dry_run):
+    """Log a Reddit post that was made outside `gtm` (e.g. via prefill or manual Chrome).
+
+    Fetches live engagement, picks the next pN id, and atomically appends
+    a new row to the launch dashboard's POSTS array. Idempotent — if the
+    URL already exists, refreshes its score/comments instead of duplicating.
+
+    \b
+    Example:
+      gtm reddit log https://www.reddit.com/r/opensource/comments/1t4re4k/ \\
+        --as Pale_Stand5217 \\
+        --product first-tree \\
+        --direction github-scan-menubar \\
+        --note "manual prefill · permanent_skip override · monitor 24h"
+    """
+    from gtm.output.traction import fetch_reddit_engagement
+
+    # Resolve dashboard paths
+    paths = [Path(p) for p in dashboard_paths] if dashboard_paths else []
+    if not paths:
+        for default in [Path.home() / "atf-launch" / "dashboard.html",
+                        Path.home() / "atf-launch" / "dist" / "index.html"]:
+            if default.exists():
+                paths.append(default)
+    if not paths:
+        raise click.UsageError(
+            "No dashboard file specified and no defaults found at "
+            "~/atf-launch/dashboard.html or ~/atf-launch/dist/index.html. "
+            "Pass --dashboard <path>."
+        )
+
+    # Derive sub + date from URL and now()
+    import re as _re
+    from datetime import datetime, timezone
+    sub_match = _re.search(r"/r/([^/]+)/", url)
+    sub = sub_match.group(1) if sub_match else "?"
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    channel = f"reddit r/{sub}"
+    account = f"u/{as_identity}"
+
+    # Fetch live engagement once
+    async def _fetch():
+        return await fetch_reddit_engagement(url)
+    eng = asyncio.run(_fetch())
+    if "error" in eng:
+        console.print(f"[yellow]Warning: could not fetch engagement: {eng['error']}[/yellow]")
+        score, comments = 0, 0
+    else:
+        score, comments = eng.get("score", 0), eng.get("comments", 0)
+
+    for path in paths:
+        _log_post_to_dashboard(
+            path, url=url, product=product, direction=direction,
+            date=date, channel=channel, account=account,
+            score=score, comments=comments, kind=kind, image=image,
+            note=note, explicit_pid=explicit_pid, dry_run=dry_run,
+        )
+
+
+def _log_post_to_dashboard(path: Path, *, url: str, product: str, direction: str,
+                            date: str, channel: str, account: str,
+                            score: int, comments: int, kind: str, image: str,
+                            note: str, explicit_pid, dry_run: bool):
+    """Append a new pN row to the POSTS array — or refresh if URL already there."""
+    import re
+
+    src = path.read_text()
+
+    # Idempotent: if the URL is already in the file, refresh score/comments only.
+    url_re = re.compile(rf"url:\s*'{re.escape(url)}'")
+    if url_re.search(src):
+        # Find the enclosing block and replace its score/comments
+        m = url_re.search(src)
+        block_start = src.rfind("{", 0, m.start())
+        block_end_re = re.compile(r"^\s*\},?", flags=re.MULTILINE)
+        end_m = block_end_re.search(src, m.end())
+        if not end_m:
+            console.print(f"[red]ERROR[/red] {path}: malformed block for existing URL")
+            return
+        block = src[block_start:end_m.end()]
+        new_block = re.sub(r"score:\s*\d+", f"score: {score}", block)
+        new_block = re.sub(r"comments:\s*\d+", f"comments: {comments}", new_block)
+        if dry_run:
+            console.print(f"[cyan]dry-run[/cyan] {path}: URL exists — would refresh to ({score}↑/{comments}c)")
+            return
+        new_src = src[:block_start] + new_block + src[end_m.end():]
+        path.write_text(new_src)
+        console.print(f"[green]✓[/green] {path}: refreshed existing row ({score}↑/{comments}c)")
+        return
+
+    # New row: pick next pid
+    if explicit_pid:
+        new_pid = explicit_pid
+    else:
+        existing = [int(x) for x in re.findall(r"id: 'p(\d+)'", src)]
+        new_pid = f"p{(max(existing) + 1) if existing else 1}"
+
+    # Build the live pN block
+    fields = [
+        f"id: '{new_pid}', product: '{product}', direction: '{direction}',",
+        f"date: '{date}', channel: '{channel}', account: '{account}',",
+        f"url: '{url}',",
+    ]
+    status_line = f"score: {score}, comments: {comments}, status: 'live', kind: '{kind}',"
+    if image:
+        status_line += f" image: '{image}',"
+    fields.append(status_line)
+    if note:
+        fields.append(f"note: {note!r},")
+
+    # Find POSTS terminator (top-level `^];` after a `const POSTS = [`)
+    posts_close = re.search(r"^\];", src, flags=re.MULTILINE)
+    if not posts_close:
+        console.print(f"[red]ERROR[/red] {path}: couldn't find POSTS `];` terminator")
+        return
+
+    # Match indent of last entry by walking back from `];`
+    tail = src[:posts_close.start()].rstrip()
+    indent_match = re.search(r"\n(\s+)\},\s*$", tail)
+    indent = indent_match.group(1) if indent_match else "  "
+    body_indent = indent + "  "
+    new_block = (
+        indent + "{\n"
+        + "\n".join(body_indent + line for line in fields) + "\n"
+        + indent + "},\n"
+    )
+
+    if dry_run:
+        console.print(f"[cyan]dry-run[/cyan] {path}: would add {new_pid} ({score}↑/{comments}c, r/{channel.split('r/')[-1]})")
+        return
+
+    new_src = src[:posts_close.start()] + new_block + src[posts_close.start():]
+    path.write_text(new_src)
+    console.print(f"[green]✓[/green] {path}: added {new_pid} ({score}↑/{comments}c)")
+
+
 # ── HN Commands ───────────────────────────────────────────────────────
 
 
