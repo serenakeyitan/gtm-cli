@@ -2992,5 +2992,112 @@ def dashboard_build(launch_path, out_path):
     click.echo(f"wrote {n} bytes to {target}")
 
 
+@dashboard.command("serve")
+@click.option("--port", default=8080, type=int, show_default=True,
+              help="Port to bind. Use 0 to let the OS pick a free port.")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+def dashboard_serve(port, launch_path):
+    """Build dashboard fresh and serve it on http://localhost:<port>/dashboard.html.
+
+    Blocks in the foreground; Ctrl-C stops the server.
+    """
+    from gtm.launch.dashboard import write_dashboard
+    from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+    import functools
+
+    ld = _resolve_launch_dir(launch_path)
+    target, n = write_dashboard(ld)
+    click.echo(f"built {n} bytes → {target}")
+
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(ld.path))
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    bound_port = server.server_address[1]
+    url = f"http://localhost:{bound_port}/dashboard.html"
+    click.echo(f"serving at {url}  (Ctrl-C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        click.echo("\nstopped")
+    finally:
+        server.server_close()
+
+
+@dashboard.command("deploy")
+@click.option("--provider", "provider", default=None,
+              type=click.Choice(["cloudflare", "vercel"]),
+              help="Hosting provider (default: dashboard.provider in yaml, "
+                   "else cloudflare)")
+@click.option("--launch", "launch_path", default=None,
+              help="Explicit launch dir path (default: walk up from cwd)")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Print the command + working dir without running it.")
+def dashboard_deploy(provider, launch_path, dry_run):
+    """Build + stage + deploy dashboard via wrangler/vercel.
+
+    Reads provider config from `dashboard:` in `.gtm-launch.yaml`. Use
+    `--dry-run` to inspect the wrangler/vercel command without executing.
+    """
+    import subprocess
+    from gtm.launch.deploy import (
+        DeployConfigError,
+        build_plan,
+        parse_deploy_url,
+        resolve_provider,
+        stage_dashboard,
+    )
+
+    ld = _resolve_launch_dir(launch_path)
+
+    try:
+        prov = resolve_provider(ld, provider)
+        plan = build_plan(ld, prov)
+    except DeployConfigError as e:
+        click.echo(f"error: {e}", err=True)
+        sys.exit(1)
+
+    # Build + stage (even on --dry-run so users see the actual artifact).
+    dashboard_html, dist_index = stage_dashboard(ld)
+    click.echo(f"staged {dist_index}  (from {dashboard_html.name})")
+
+    click.echo(f"provider: {plan.provider}  project: {plan.project}")
+    click.echo(f"cwd:      {plan.cwd}")
+    click.echo(f"command:  {plan.cmd_str()}")
+
+    if dry_run:
+        click.echo("dry-run: not executing")
+        return
+
+    try:
+        result = subprocess.run(
+            plan.cmd,
+            cwd=str(plan.cwd),
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        click.echo(
+            f"error: `{plan.cmd[0]}` not found on PATH. Install it or use --dry-run.",
+            err=True,
+        )
+        sys.exit(127)
+
+    if result.stdout:
+        click.echo(result.stdout, nl=False)
+    if result.stderr:
+        click.echo(result.stderr, nl=False, err=True)
+
+    if result.returncode != 0:
+        click.echo(f"\ndeploy failed (exit {result.returncode})", err=True)
+        sys.exit(result.returncode)
+
+    url = parse_deploy_url(result.stdout, result.stderr)
+    if url:
+        click.echo("")
+        click.echo(f"deployed: {url}")
+    else:
+        click.echo("\ndeployed (no URL parsed from output)")
+
+
 if __name__ == "__main__":
     main()

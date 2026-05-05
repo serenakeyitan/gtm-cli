@@ -10,6 +10,7 @@ from gtm.launch import draft  # re-export module for `from gtm.launch import dra
 from gtm.launch import submit  # re-export module for `from gtm.launch import submit`
 from gtm.launch import sync  # re-export module for `from gtm.launch import sync`
 from gtm.launch import dashboard  # re-export module for `from gtm.launch import dashboard`
+from gtm.launch import deploy  # re-export module for `from gtm.launch import deploy`
 
 __all__ = [
     "LaunchDir",
@@ -21,4 +22,5 @@ __all__ = [
     "submit",
     "sync",
     "dashboard",
+    "deploy",
 ]
