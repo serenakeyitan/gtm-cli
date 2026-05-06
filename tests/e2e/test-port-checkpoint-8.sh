@@ -23,7 +23,9 @@ PYRUN="uv run --quiet python"
 echo "── Checkpoint 8: full integration smoke ──"
 
 echo "[1] Re-run all earlier checkpoints"
-for cp in 1 2 3 4 5 6 7; do
+# checkpoint-3 was removed in Phase 5 along with gtm.agents.twitter_promoter
+# (the prompt-wrapping legacy agent it validated). See PLAN-claude-code-shape.md.
+for cp in 1 2 4 5 6 7; do
     if tests/e2e/test-port-checkpoint-$cp.sh >/dev/null 2>&1; then
         ok "checkpoint-$cp passes"
     else
@@ -42,10 +44,12 @@ check "gtm engagement is registered" \
     "uv run --quiet gtm --help | grep -q engagement"
 
 echo "[3] All ported agents importable together"
+# twitter_promoter was deleted in Phase 5 (its prompt was unused after the
+# legacy step-based runner became dead code). engagement_loop is still live
+# (used by `gtm engagement`).
 check "all agents import without conflicts" \
     "$PYRUN -c '
 from gtm.agents.promoter import run_promoter
-from gtm.agents.twitter_promoter import run_twitter_promoter
 from gtm.agents.engagement_loop import run_engagement_loop
 from gtm.agents.scout import run_twitter_scout
 from gtm.agents.builder import run_builder
