@@ -61,7 +61,7 @@ This matches Claude Code's own design: typed tools (`Read`, `Bash`), markdown sk
 Just the existing fine-grained registry, exposed as typed tools:
 
 - **Sources** (5): `twitter/search`, `twitter/user_tweets`, `reddit/search`, `hn/search`, `hn/top_stories`
-- **Filters** (4 registered): `filter/engagement`, `filter/keyword`, `filter/deduplicate`, `filter/limit`. (`identity_affinity.py` exists but is not yet imported in `gtm/modules/filters/__init__.py` — wire-up is a one-line PR if needed.)
+- **Filters** (4 registered): `filter/engagement`, `filter/keyword`, `filter/deduplicate`, `filter/limit`. (`identity_affinity.py` exists in this directory but is **not** a Module subclass — it's a utility function used by `gtm reddit affinity` and the promoter agent. The filename is misleading; nothing to wire up.)
 - **Transforms** (4): `transform/rewrite`, `transform/extract_url`, `transform/platform_adapt`, `transform/summarize`
 - **Actions** (5): `twitter/post`, `twitter/like`, `twitter/retweet`, `reddit/submit`, `hn/submit_link`. (`twitter/like` and `twitter/retweet` are separate Module subclasses living in `gtm/modules/actions/twitter_engage.py`.)
 - **Monitors** (1): `track/engagement`
