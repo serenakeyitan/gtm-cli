@@ -1,118 +1,147 @@
 # Reddit per-subreddit posting rules.
 #
 # Reddit doesn't expose these via API — they're scraped from sidebar text + lived
-# experience. Edit by hand as you learn more (e.g. after a removal).
+# experience. Edit by hand as you learn more (e.g. after a removal), or auto-fetch
+# with `gtm reddit fetch-sub-rules <sub>`.
 #
 # Schema per sub:
-#   min_total_karma:   minimum total karma to attempt posting (null = no rule)
-#   min_link_karma:    minimum link karma (null = no rule)
-#   min_comment_karma: minimum comment karma (null = no rule)
-#   min_age_days:      minimum account age in days (null = no rule)
-#   notes:             free text — observed gotchas, what kind of post works
-#   permanent_skip:    true if we've been mod-removed and shouldn't retry from any account
+#   # Karma / age gates (manual; null = no rule)
+#   min_total_karma:     minimum total karma to attempt posting
+#   min_link_karma:      minimum link karma
+#   min_comment_karma:   minimum comment karma
+#   min_age_days:        minimum account age in days
 #
-# Verdict logic:
+#   # Free text + flags (manual)
+#   notes:               observed gotchas, what kind of post works
+#   permanent_skip:      true if mod-removed; never retry from any account
+#
+#   # Auto-fetched fields (filled by `gtm reddit fetch-sub-rules`)
+#   last_fetched:        ISO8601 timestamp of the last fetch
+#   subscribers:         current subscriber count
+#   submission_type:     'any' | 'self' | 'link' (what the sub allows)
+#   flair_required_auto: true if automod requires a flair (auto-detected)
+#   source:              'manual' (curated) or 'auto' (fetcher-only)
+#
+# Verdict logic (used by `gtm reddit preflight`):
 #   FAIL       — at least one rule is violated
 #   BORDERLINE — passes by <= 20% margin on any rule (e.g. 110 karma when min is 100)
 #   PASS       — comfortably above all minimums
 
 subs:
-  # === Tested 2026-04-20 doc-drift batch ===
   ClaudeAI:
     min_total_karma: null
     min_age_days: null
-    notes: "Best-performing sub for first-tree (8 score, 20 comments). No karma gate observed. Self-promo tolerated if framed as 'sharing a thing I tried'."
+    notes: Best-performing sub for first-tree (8 score, 20 comments). No karma gate observed. Self-promo
+      tolerated if framed as 'sharing a thing I tried'.
     permanent_skip: false
-
+    last_fetched: '2026-04-28T22:25:37Z'
+    subscribers: 800377
+    submission_type: any
+    flair_required_auto: true
+    source: manual
   devtools:
     min_total_karma: null
     min_age_days: null
-    notes: "Low traffic but tolerant. 'open to ideas' framing worked."
+    notes: Low traffic but tolerant. 'open to ideas' framing worked.
     permanent_skip: false
-
   coolgithubprojects:
     min_total_karma: null
     min_age_days: null
-    notes: "Link-only sub. Title format: '[lang] Project: description'. Auto-removes self/text posts."
+    notes: 'Link-only sub. Title format: ''[lang] Project: description''. Auto-removes self/text posts.'
     permanent_skip: false
-
   LocalLLaMA:
     min_total_karma: null
     min_age_days: null
-    notes: "Mod-removed our 4/20 post. Strict no-self-promo culture. Only post research/findings, never project announcements."
-    permanent_skip: true   # for first-tree announcement-style posts; revisit if angle changes
-
+    notes: Mod-removed our 4/20 post. Strict no-self-promo culture. Only post research/findings, never
+      project announcements.
+    permanent_skip: true
   opensource:
     min_total_karma: null
     min_age_days: null
-    notes: "Mod-removed our 4/20 post. Voice was too 'i built'. Could retry with neutral 'useful resource' framing."
-    permanent_skip: true   # for current voice; revisit with reframe
-
+    notes: Mod-removed our 4/20 post. Voice was too 'i built'. Could retry with neutral 'useful resource'
+      framing.
+    permanent_skip: true
   programming:
     min_total_karma: null
     min_age_days: null
-    notes: "Mod-removed (not just automod) our 4/20 post. Self-promo intolerant. Only blog-post-quality essays land."
+    notes: Mod-removed (not just automod) our 4/20 post. Self-promo intolerant. Only blog-post-quality
+      essays land.
     permanent_skip: true
-
-  # === Untested but on llm-wiki shortlist ===
   AI_Agents:
     min_total_karma: null
     min_age_days: 30
-    notes: "Core ICP for first-tree. Allows project posts if useful for agent builders. Avoid 'launch'/'i made' headlines."
+    notes: Core ICP for first-tree. Allows project posts if useful for agent builders. Avoid 'launch'/'i
+      made' headlines.
     permanent_skip: false
-
   LangChain:
     min_total_karma: null
     min_age_days: null
-    notes: "Allows tool-sharing if framed as 'works with LangChain' or 'compared to <langchain feature>'. Pure announcements may be removed."
+    notes: Allows tool-sharing if framed as 'works with LangChain' or 'compared to <langchain feature>'.
+      Pure announcements may be removed.
     permanent_skip: false
-
   ChatGPTCoding:
     min_total_karma: null
     min_age_days: null
-    notes: "Cursor/Claude Code crowd. Karma rules loose. BUT: requires post flair, and the flair UI silently rejects valid selections — submit kept failing with 'add a flair' even when one was selected (2026-04-27). Pivoted to r/AgentsOfAI. Retest before using."
-    permanent_skip: false  # not banned, just blocked by flair UI bug; revisit
-
+    notes: 'Cursor/Claude Code crowd. Karma rules loose. BUT: requires post flair, and the flair UI silently
+      rejects valid selections — submit kept failing with ''add a flair'' even when one was selected (2026-04-27).
+      Pivoted to r/AgentsOfAI. Retest before using.'
+    permanent_skip: false
   AgentsOfAI:
     min_total_karma: null
     min_age_days: null
-    notes: "Used as fallback for r/ChatGPTCoding (2026-04-27). Sister sub to r/AI_Agents. Text posts allowed, no flair required."
+    notes: Used as fallback for r/ChatGPTCoding (2026-04-27). Sister sub to r/AI_Agents. Text posts allowed,
+      no flair required.
     permanent_skip: false
-
   AutoGenAI:
     min_total_karma: null
     min_age_days: null
-    notes: "Niche, ~10k. Microsoft AutoGen overlap. Fine for niche project shares."
+    notes: Niche, ~10k. Microsoft AutoGen overlap. Fine for niche project shares.
     permanent_skip: false
-
   MachineLearning:
     min_total_karma: 100
     min_comment_karma: 100
     min_age_days: 60
-    notes: "Strict. [D] Discussion or [R] Research only — no [P] Project posts unless paper-quality. One wrong tag = removal."
+    notes: Strict. [D] Discussion or [R] Research only — no [P] Project posts unless paper-quality. One
+      wrong tag = removal.
     permanent_skip: false
-
   singularity:
     min_total_karma: 50
     min_age_days: 60
-    notes: "Karma + age gate. 'AGI/futurist' framing required, technical hooks underperform."
+    notes: Karma + age gate. 'AGI/futurist' framing required, technical hooks underperform.
     permanent_skip: false
-
-  # === Researched 2026-04-28 for ai-os/ai-employee batch ===
   cursor:
     min_total_karma: null
     min_age_days: null
-    notes: "10% self-promo rule (no more than 10% of cross-Reddit activity self-promotional). Flair REQUIRED. 'No slop' rule auto-removes low-effort/AI-generated posts and quick screenshots. Must tie to Cursor specifically — generic 'tool for agents' = removal. No promoting competing products."
+    notes: 10% self-promo rule (no more than 10% of cross-Reddit activity self-promotional). Flair REQUIRED.
+      'No slop' rule auto-removes low-effort/AI-generated posts and quick screenshots. Must tie to Cursor
+      specifically — generic 'tool for agents' = removal. No promoting competing products.
     permanent_skip: false
-
   OpenSourceAI:
     min_total_karma: null
     min_age_days: null
-    notes: "17.5k subs. Welcomes model releases, fine-tuning, inference, agents, benchmarks. Tool MUST be open-source (open weights/data/tooling). Closed SaaS = off-topic. No flair required. No formal self-promo limits in API."
+    notes: 17.5k subs. Welcomes model releases, fine-tuning, inference, agents, benchmarks. Tool MUST
+      be open-source (open weights/data/tooling). Closed SaaS = off-topic. No flair required. No formal
+      self-promo limits in API.
     permanent_skip: false
-
   agi:
     min_total_karma: null
     min_age_days: null
-    notes: "109k. No published rules (empty rules array via API). Audience is AGI theory / neuroscience / futurism — NOT dev tooling. Tool-launch posts will be downvoted as off-topic even if not removed. Use only for conceptual/theoretical framings."
+    notes: 109k. No published rules (empty rules array via API). Audience is AGI theory / neuroscience
+      / futurism — NOT dev tooling. Tool-launch posts will be downvoted as off-topic even if not removed.
+      Use only for conceptual/theoretical framings.
     permanent_skip: false
+  openclaw:
+    min_total_karma: null
+    min_link_karma: null
+    min_comment_karma: null
+    min_age_days: null
+    notes: '118k subs · submission_type=self · flair required (auto-detected) · rules: No spam, self-promotion,
+      or paid services; No low-value posts; No blatant unreviewed AI-generated content; No requests for
+      DMs, link in profile, or off-thread funneling; Links must be from approved or clearly legitimate
+      sources · about: OpenClaw: The AI that actually does things. The lobster way. 🦞'
+    permanent_skip: false
+    last_fetched: '2026-05-05T20:01:36Z'
+    source: auto
+    subscribers: 117799
+    submission_type: self
+    flair_required_auto: true
