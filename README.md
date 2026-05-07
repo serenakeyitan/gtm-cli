@@ -1,195 +1,319 @@
 # gtm-cli
 
-> **Launching something?** Skip to the [10-minute Launch Onboarding](docs/LAUNCH-ONBOARDING.md) — scaffold a launch dir, draft, ship, sync, and deploy a dashboard end-to-end.
-
-> Claude Code gave developers a terminal for everything.  
+> Claude Code gave developers a terminal for everything.
 > **gtm-cli gives marketers the same.**
 
-One terminal. Every platform. No more switching between Twitter, Reddit, and HN dashboards.
+Terminal-native go-to-market automation for Twitter, Reddit, and Hacker News.
+One CLI for humans, one MCP server for agents — both backed by the same
+typed module registry, rate limiter, and multi-account safety net.
 
 ```bash
-$ gtm twitter user karpathy --count 3
-  @karpathy — latest 3 tweets:
-  LLM Knowledge Bases...                    ❤️ 11,025  🔁 1,124
-  New supply chain attack for npm axios...  ❤️ 10,444  🔁 1,121
-
 $ gtm hn top --count 3
   1. [1586] LinkedIn is searching your browser extensions
   2. [1207] Google releases Gemma 4 open models
+  3. [987]  Show HN: a CLI for testing browser layouts in 100ms
 
-$ gtm run combined-routes -p query="AI open source" -p min_likes=10
-  ✅ scout          twitter/search (16 items)
-  ✅ filter_hot     filter/engagement (8 items)
-  ✅ r1_keywords    filter/keyword (5 items)       ─┐ Route 1 → Reddit
-  ✅ r1_adapt       transform/platform_adapt (5)    ─┘
-  ✅ r2_extract     transform/extract_url (8 items) ─┐ Route 2 → HN
-  ✅ r2_adapt       transform/platform_adapt (4)    ─┘
-  ✅ summary        filter/limit (6 items)
-  Status: completed
+$ gtm reddit submit --sub SaaS --title "..." --body "..." --dry-run
+  DRY RUN — nothing will be posted
+    Platform: reddit
+    Sub:      SaaS
+    Account:  organic_alpha
+    Title:    ...
+
+$ gtm traction
+  🐦 twitter  "Just shipped v2!"     ❤️ 142  🔁 23  👁 8,401
+  🤖 reddit   "Show r/SaaS: ..."     ⬆️ 38   💬 7   📊 0.92
+  🟠 hn       "Show HN: gtm-cli"     ▲ 23    💬 4
 ```
+
+> **Just want to launch?** Skip to the [10-minute Launch Onboarding](docs/LAUNCH-ONBOARDING.md) — scaffold a launch dir, draft, ship, sync, deploy.
+
+---
+
+## Two ways to use it
+
+### As a CLI (humans)
+
+```bash
+gtm twitter search "AI agents"          # search
+gtm reddit submit --sub SaaS ...        # post (rate-limited)
+gtm traction                            # live metrics
+gtm launch init                         # start a launch repo
+gtm dashboard build                     # render the dashboard
+```
+
+The CLI is interactive, multi-account aware, and rate-limit-coordinated.
+Every posting command takes `--dry-run`. See `gtm --help` for the full
+surface.
+
+### As an MCP server (agents)
+
+```json
+// .mcp.json in your Claude Code project
+{
+  "mcpServers": {
+    "gtm": { "command": "gtm", "args": ["mcp", "serve"] }
+  }
+}
+```
+
+The agent gets **26 typed tools** auto-generated from the module registry
+— `mcp__gtm__hn_search`, `mcp__gtm__reddit_submit`, etc. Each tool returns
+a structured `ModuleResult` (no stdout parsing). Pair with the
+[`skills/`](skills/) library and the agent reads its own playbooks.
+
+See [docs/mcp-quickstart.md](docs/mcp-quickstart.md) for the full I/O contract.
+
+---
 
 ## Install
 
 ```bash
-pip install -e .
-gtm init
-gtm auth twitter    # paste Cookie-Editor export
+pip install -e .                # base
+pip install -e ".[mcp]"         # + MCP server
+pip install -e ".[agents]"      # + LLM-powered transforms
+pip install -e ".[dev]"         # + pytest
+
+gtm init                        # scaffold ~/.config/gtm/
+gtm auth twitter                # connect (Cookie-Editor or Playwright)
 gtm auth reddit
 gtm auth hn
 ```
 
 ### Inside Claude Code
 
-```
-Install gtm-cli: run `pip install -e /path/to/gtm-cli && gtm init`
-then help me connect my social media accounts.
-```
+Drop the MCP config above, then ask the agent normally:
 
-## 30 Composable Modules
+> "Search HN for AI agents, draft a Reddit post in our voice, and
+> dry-run it."
 
-Every piece is a Lego block. Compose them into any strategy.
+The agent reads [`skills/README.md`](skills/README.md) for the load order,
+follows [`skills/voice/reddit-organic.md`](skills/voice/reddit-organic.md)
+for tone, runs [`skills/decisions/safety-checks.md`](skills/decisions/safety-checks.md),
+then calls `mcp__gtm__reddit_submit` with `dry_run: true`.
+
+---
+
+## What's in the registry
+
+24 typed Modules, every one a Lego block:
 
 ```bash
 $ gtm modules list
-  SOURCES (5)     twitter/search, twitter/user_tweets, reddit/search, hn/search, hn/top_stories
-  FILTERS (4)     filter/engagement, filter/keyword, filter/deduplicate, filter/limit
-  TRANSFORMS (4)  transform/rewrite, transform/extract_url, transform/platform_adapt, transform/summarize
-  ACTIONS (5)     twitter/post, twitter/like, twitter/retweet, reddit/submit, hn/submit_link
-  CONTROL (4)     control/delay, control/jitter, control/for_each, control/condition
-  AGENTS (7)      agent/scout, agent/novelty_check, agent/build, agent/test,
-                  agent/promote_reddit, agent/promote_hn, agent/synthesize
+  SOURCES (5)     twitter/search, twitter/user_tweets, reddit/search,
+                  hn/search, hn/top_stories
+  FILTERS (4)     filter/engagement, filter/keyword,
+                  filter/deduplicate, filter/limit
+  TRANSFORMS (4)  transform/rewrite, transform/extract_url,
+                  transform/platform_adapt, transform/summarize
+  ACTIONS (5)     twitter/post, twitter/like, twitter/retweet,
+                  reddit/submit, hn/submit_link
+  CONTROL (4)     control/delay, control/jitter,
+                  control/for_each, control/condition
   MONITORS (1)    track/engagement
+  AGENT (1)       agent/synthesize     # LLM ranker, 1 call, deterministic fallback
   STRATEGIES (8+) Any strategy YAML is also a composable module
 ```
 
-### Cross-Platform Pipelines
+The MCP server exposes 24 of these (everything except `strategy/*`, which
+is callable via `mcp__gtm__run_strategy({"path": ...})`), plus 2
+coordination tools (`list_modules`, `run_strategy`). 26 tools total.
+
+---
+
+## Cross-platform pipelines (YAML)
+
+YAML strategies still work — useful when you need reproducible, parallel,
+multi-step runs:
 
 ```yaml
-# hn-to-reddit.yaml — scrape HN, filter, adapt, post to Reddit
-modules:
-  scrape:    { use: hn/top_stories, params: { count: 10 } }
-  hot:       { use: filter/engagement, input: scrape, params: { min_score: 300 } }
-  adapt:     { use: transform/platform_adapt, input: hot, params: { platform: reddit } }
-```
-
-```yaml
-# twitter-to-hn.yaml — scrape Twitter, extract URLs, submit to HN
-modules:
-  scout:     { use: twitter/search, params: { query: "AI tools" } }
-  urls:      { use: transform/extract_url, input: scout }
-  clean:     { use: transform/platform_adapt, input: urls, params: { platform: hn } }
-```
-
-### Parallel Execution
-
-Modules with no mutual dependencies run simultaneously:
-
-```yaml
+# strategies/examples/cross-platform-scout.yaml
 modules:
   twitter: { use: twitter/search, params: { query: "AI" } }    # ─┐
-  reddit:  { use: reddit/search, params: { query: "AI" } }     # ─┤ PARALLEL
-  hn:      { use: hn/search, params: { query: "AI" } }         # ─┘
+  reddit:  { use: reddit/search,  params: { query: "AI" } }    # ─┤ PARALLEL
+  hn:      { use: hn/search,      params: { query: "AI" } }    # ─┘
   merge:   { use: filter/limit, input: [twitter, reddit, hn] } # waits for all 3
 ```
 
-### Strategies Compose Into Bigger Strategies
-
-```yaml
-# full-launch.yaml
-modules:
-  hn_launch:     { use: strategy/hn-scout-and-filter, params: { ... } }
-  reddit_launch: { use: strategy/reddit-to-twitter, params: { ... } }
-  combined:      { use: filter/limit, input: [hn_launch, reddit_launch] }
+```bash
+$ gtm run cross-platform-scout
 ```
 
-## Direct Commands
+Strategies compose — a strategy YAML is itself a `strategy/*` module other
+strategies can call. See [`strategies/examples/`](strategies/examples/) for 8
+worked examples.
+
+**Note:** strategies are demoted from primary authoring surface to
+artifact. The agent plans ad-hoc via MCP tools by default; it materializes
+a strategy YAML only when you ask for repeatability ("save this so I can
+run it next month").
+
+---
+
+## Launch workflow
+
+End-to-end campaign management for a launch repo. One command per stage:
 
 ```bash
-# Search
-gtm twitter search "AI agents" --count 10
-gtm twitter user karpathy --count 5
-gtm reddit search "launch strategy" --sub startups
-gtm hn search "Show HN"
-gtm hn top --count 15
-
-# Post (rate-limited, safe)
-gtm twitter post "Just shipped v2! 🚀" --dry-run
-gtm reddit submit --sub SaaS --title "..." --body "..." --dry-run
-gtm hn submit --title "Show HN: ..." --url "..." --dry-run
-
-# Strategies
-gtm run --list                          # see all + execution mode
-gtm run combined-routes -p query="AI"   # run a strategy
-gtm run cross-platform-scout --dry-run  # preview
-gtm modules create my-strategy          # scaffold new YAML
-
-# Track
-gtm traction                            # live engagement metrics
-gtm traction --json                     # for agent analysis
-gtm status                              # connected accounts
-gtm log                                 # recent activity
+gtm launch init                                     # scaffold .gtm-launch.yaml + dirs
+gtm launch link <existing-launch-repo>              # adopt an existing repo
+gtm post draft <product> --channel "reddit r/X" \   # interactive create
+    --title "..." --direction <campaign>
+gtm post submit <slug> --as <identity>              # preflight + Playwright submit
+gtm post sync                                       # refresh engagement
+gtm dashboard build                                 # render dashboard.html
+gtm dashboard serve                                 # local preview
+gtm dashboard deploy --provider cloudflare          # publish
 ```
 
-## Architecture: Direct API First, LLM Last
+Posts are markdown files with frontmatter; the dashboard is a generated
+HTML over them. Git history IS the campaign history. See
+[docs/LAUNCH-ONBOARDING.md](docs/LAUNCH-ONBOARDING.md) for the complete walkthrough.
 
-**Default to direct API calls.** Only use LLM when a task genuinely requires reasoning.
+---
 
-| Approach | API Calls | Speed | Cost | When |
-|----------|-----------|-------|------|------|
-| Module DAG (default) | 0 Claude calls | 30 sec | $0.00 | Scrape, filter, transform, post |
-| Hybrid | 1 Claude call | 60 sec | $0.01 | Need intelligent selection |
-| Full LLM Agent (legacy) | ~175 Claude calls | 30 min | $1.00 | Need creative writing, code generation |
+## Direct API first, LLM last
 
-If LLM fails (rate limit, API down), deterministic fallback always produces output.
+This is the architecture thesis and it still holds:
 
-See [docs/architecture-principles.md](./docs/architecture-principles.md) for details.
+| Approach | LLM calls | Speed | Cost | When |
+|---|---|---|---|---|
+| Module DAG (default) | 0 | 30s | $0.00 | scrape, filter, transform, post, track |
+| Hybrid | 1 | 60s | $0.01 | need ranking or tone adaptation |
+| Agent reasoning | varies | varies | varies | open-ended judgment, multi-step orchestration |
 
-## Account Safety
+The MCP server gives the agent typed tools. The agent reasons over them.
+LLM modules (`transform/rewrite`, `agent/synthesize`) all degrade to
+deterministic fallbacks on rate-limit / API outage — the pipeline always
+produces output.
 
-Rate limits are always on. `--force` exists but prints a warning and requires confirmation.
+See [AGENTS.md](AGENTS.md) for the full operational rules.
+
+---
+
+## Account safety
+
+Rate limits are always on. `--force` exists but warns loudly.
+
+| Platform | Per hour | Per day | Min cooldown |
+|---|---|---|---|
+| Twitter | 2 | 6 | 5 min |
+| Reddit | 1 | 3 | 10 min |
+| HN | 1 | 2 | 30 min |
+
+A 5-layer rate-limit coordinator wraps the per-account limiter — checks
+identity cooldown, sub-specific rules, duplicate detection, daily caps,
+and proxy-level limits before any post call.
+
+⚠️ Use burner accounts, not your personal ones. Auto-rotate to backup
+identities on failure.
+
+---
+
+## Skills library
+
+Markdown playbooks the agent reads at task time:
 
 ```
-Twitter:  2 posts/hr, 6/day, 5min cooldown
-Reddit:   1 post/hr, 3/day, 10min cooldown
-HN:       1 submit/hr, 2/day, 30min cooldown
+skills/
+├── README.md              ← agent's entry point
+├── voice/
+│   ├── reddit-organic.md  ← Reddit voice rules (banned phrases, all lowercase)
+│   ├── hn-technical.md    ← HN tone (Show HN format, neutral)
+│   └── twitter-engagement.md
+├── workflows/
+│   ├── show-hn-launch.md  ← end-to-end Show HN
+│   ├── reddit-organic-seed.md
+│   ├── cross-platform-scout.md
+│   └── traction-watch.md
+├── decisions/
+│   ├── which-platform.md  ← HN vs Reddit vs Twitter
+│   ├── when-to-amplify.md ← supporter-account boosts
+│   └── safety-checks.md   ← always-run pre-post checklist
+└── reference/
+    └── platform-quirks.md ← real removal patterns from past runs
 ```
 
-⚠️ Use burner accounts, not your personal ones.
+Skills are forkable — drop overrides in `~/.config/gtm/skills/<path>` or
+`<project>/.gtm/skills/<path>`. Project-local takes precedence.
 
-## Strategy Locations
+---
+
+## File locations
 
 ```
-~/.config/gtm/strategies/    Your strategies (local, private, never on GitHub)
-strategies/examples/            Sample strategies (shipped with repo, 8 examples)
+~/.config/gtm/                 user config (private)
+├── identities/                accounts + cookies
+├── strategies/                user strategies (private)
+├── rate_limits/               rate limit state
+└── output/                    posted content log (git repo)
+
+<repo>/skills/                 agent instruction set
+<repo>/strategies/examples/    reference strategies
+<repo>/gtm/data/               platform rules (reddit_sub_rules.yaml)
+<repo>/docs/                   PLAN-*, mcp-quickstart, LAUNCH-ONBOARDING
 ```
 
-## Project Structure
+---
+
+## Project structure
 
 ```
 gtm/
-├── cli.py              CLI entry point
-├── config.py            XDG config (~/.config/gtm/)
-├── modules/             30 composable modules
-│   ├── sources/         Scrape platforms (5)
-│   ├── filters/         Process data (4)
-│   ├── transforms/      Adapt content (4)
-│   ├── actions/         Post/engage (5)
-│   ├── control/         Flow logic (4)
-│   ├── agents/          LLM-powered (7 + strategy wrapper)
-│   └── monitors/        Track results (1)
-├── platforms/           Twitter, Reddit, HN adapters
-├── engine/              DAG runner + legacy runner
-├── identity/            Account management
-├── safety/              Rate limiter
-└── output/              Git-backed logger + traction
+├── cli.py             CLI entry (~3640 lines, mostly interactive UX)
+├── sdk.py             SDK facade — run_module, run_strategy
+├── mcp_server.py      MCP server — auto-gen tool schemas from registry
+├── config.py          XDG config (~/.config/gtm/)
+├── modules/           24 typed Modules
+│   ├── sources/       (5)
+│   ├── filters/       (4)
+│   ├── transforms/    (4)
+│   ├── actions/       (5)
+│   ├── control/       (4)
+│   ├── agents/        (1, synthesize) + strategy_module
+│   └── monitors/      (1)
+├── platforms/         Twitter, Reddit, HN adapters
+├── engine/            DAG runner (parallel, topo-sorted)
+├── launch/            Launch dir / post / dashboard helpers
+├── identity/          Multi-account manager + selector
+├── safety/            Rate limiter + 5-layer coordinator
+└── output/            Git-backed logger + traction tracker
 
-prompts/                 Style guides + agent prompts (7 files)
-strategies/examples/     Sample strategies (8 YAML files)
+skills/                Agent instruction set (markdown)
+strategies/examples/   8 reference strategies
+prompts/               Live-consumed prompts (style_guide, engagement_loop)
+docs/                  PLAN-*, mcp-quickstart, LAUNCH-ONBOARDING, ROADMAP
 ```
 
-## Roadmap
+---
 
-See [ROADMAP.md](./ROADMAP.md) for full phase-by-phase progress with showcases.
+## Documentation
+
+- [SKILL.md](SKILL.md) — agent briefing (load order, tool table, hard rules)
+- [AGENTS.md](AGENTS.md) — operational rules (direct-API-first, post lifecycle, rate limits)
+- [skills/README.md](skills/README.md) — skill index
+- [docs/mcp-quickstart.md](docs/mcp-quickstart.md) — MCP server setup
+- [docs/LAUNCH-ONBOARDING.md](docs/LAUNCH-ONBOARDING.md) — 10-minute launch walkthrough
+- [docs/PLAN-claude-code-shape.md](docs/PLAN-claude-code-shape.md) — architecture
+- [ROADMAP.md](ROADMAP.md) — phase-by-phase progress
+
+---
+
+## Contributing
+
+Issues and PRs welcome at [serenakeyitan/gtm-cli](https://github.com/serenakeyitan/gtm-cli).
+
+For local development:
+
+```bash
+git clone https://github.com/serenakeyitan/gtm-cli
+cd gtm-cli
+uv sync --extra dev --extra agents --extra mcp
+uv run pytest tests/                    # 28 unit tests
+bash tests/e2e/test-launch-cp1.sh       # one of 21 e2e suites
+```
+
+---
 
 ## License
 

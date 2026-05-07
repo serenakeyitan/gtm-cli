@@ -1,6 +1,6 @@
 """gtm-cli — Terminal-native marketing automation."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Public SDK surface — see gtm/sdk.py for design intent.
 # Importing here makes `import gtm; gtm.run_module(...)` work.

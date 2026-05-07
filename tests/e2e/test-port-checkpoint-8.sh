@@ -23,9 +23,11 @@ PYRUN="uv run --quiet python"
 echo "── Checkpoint 8: full integration smoke ──"
 
 echo "[1] Re-run all earlier checkpoints"
-# checkpoint-3 was removed in Phase 5 along with gtm.agents.twitter_promoter
-# (the prompt-wrapping legacy agent it validated). See PLAN-claude-code-shape.md.
-for cp in 1 2 4 5 6 7; do
+# checkpoint-3: removed in Phase 5 (validated gtm.agents.twitter_promoter).
+# checkpoint-7: removed in OSS cleanup (validated gtm.agents.promoter Phase C).
+# Both agents were prompt-wrapping legacy code; their behavior moved into
+# skills/workflows/. See PLAN-claude-code-shape.md.
+for cp in 1 2 4 5 6; do
     if tests/e2e/test-port-checkpoint-$cp.sh >/dev/null 2>&1; then
         ok "checkpoint-$cp passes"
     else
@@ -43,16 +45,19 @@ check "gtm warmup is registered" \
 check "gtm engagement is registered" \
     "uv run --quiet gtm --help | grep -q engagement"
 
-echo "[3] All ported agents importable together"
-# twitter_promoter was deleted in Phase 5 (its prompt was unused after the
-# legacy step-based runner became dead code). engagement_loop is still live
-# (used by `gtm engagement`).
-check "all agents import without conflicts" \
+echo "[3] Live gtm.agents shared infra still importable"
+# The prompt-wrapping agents (promoter, scout, builder, tester, hn_promoter,
+# novelty_checker, twitter_promoter) were deleted in the OSS cleanup pass.
+# What remains in gtm/agents/ is the shared infra used by `gtm engagement`:
+#   - engagement_loop (live, called by `gtm engagement`)
+#   - base, agent_wrapper, activity_log, state_tools (imported by engagement_loop)
+check "engagement_loop + shared infra import without conflicts" \
     "$PYRUN -c '
-from gtm.agents.promoter import run_promoter
 from gtm.agents.engagement_loop import run_engagement_loop
-from gtm.agents.scout import run_twitter_scout
-from gtm.agents.builder import run_builder
+from gtm.agents.base import load_prompt, extract_json_from_result
+from gtm.agents.agent_wrapper import run_tracked_agent
+from gtm.agents.activity_log import ActivityLogger
+from gtm.agents.state_tools import read_run_state, write_phase_output
 '"
 
 echo "[4] All ported platforms importable together"
@@ -69,13 +74,12 @@ check "no openclaw_growth_pipeline imports remain in ported code" \
     "! grep -rn 'openclaw_growth_pipeline' gtm/ 2>/dev/null"
 
 echo "[6] Identity affinity wired through the stack"
-check "promoter imports same affinity module the tools call" \
+# The promoter source check was removed — gtm.agents.promoter was deleted
+# in the OSS cleanup pass. The reddit_pick_identity_for_sub tool is still
+# verified to exist on the platform side:
+check "reddit_pick_identity_for_sub exists on platforms.reddit.tools" \
     "$PYRUN -c '
-import inspect
-from gtm.agents import promoter
 from gtm.platforms.reddit import tools as rt
-# Both reference identity-routing names
-assert \"reddit_pick_identity_for_sub\" in inspect.getsource(promoter)
 assert hasattr(rt, \"reddit_pick_identity_for_sub\")
 '"
 

@@ -27,12 +27,6 @@ echo "[1] reddit_preflight MCP tool exposed"
 check "reddit_preflight imports from gtm.platforms.reddit.tools" \
     "$PYRUN -c 'from gtm.platforms.reddit.tools import reddit_preflight'"
 
-check "reddit_preflight tool wired into promoter module" \
-    "$PYRUN -c '
-import gtm.agents.promoter as p
-assert hasattr(p, \"reddit_preflight\"), \"reddit_preflight missing from promoter import\"
-'"
-
 echo "[2] reddit_preflight tool runs end-to-end (with injected stats path)"
 check "reddit_preflight tool returns BORDERLINE for Pale_Stand5217 vs MachineLearning" \
     "$PYRUN -c '
@@ -90,24 +84,10 @@ assert safe == [\"alice\"], safe
 assert log[0][\"verdict\"] == \"ERROR\", log
 '"
 
-echo "[4] Promoter prompt mentions preflight in Phase C"
-check "prompt source contains reddit_preflight in Phase C section" \
-    "$PYRUN -c '
-import inspect, re
-import gtm.agents.promoter as p
-src = inspect.getsource(p.run_promoter)
-# Find Phase C block (up to Phase D).
-m = re.search(r\"Phase C.*?Phase D\", src, re.DOTALL)
-assert m, \"Phase C not found\"
-phase_c = m.group(0)
-assert \"reddit_preflight\" in phase_c, phase_c
-assert \"FAIL\" in phase_c
-assert \"DROP\" in phase_c or \"drop\" in phase_c
-'"
-
-echo "[5] Tool list in MCP server includes reddit_preflight"
-check "promoter.py source registers reddit_preflight in tools=[...]" \
-    "grep -q 'reddit_preflight,' gtm/agents/promoter.py"
+# Sections [4] and [5] tested gtm.agents.promoter source — the agent was
+# deleted in the OSS cleanup pass (skills/workflows/reddit-organic-seed.md
+# replaces its behavior). The reddit_preflight tool itself is verified by
+# checks above.
 
 echo
 echo "── Checkpoint 3 result: $PASS passed, $FAIL failed ──"

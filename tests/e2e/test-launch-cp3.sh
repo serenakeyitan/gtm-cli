@@ -116,7 +116,9 @@ echo "  → slug:       $SLUG1"
 
 # ── [4] Slug pattern: <YYYY-MM-DD>-<channel>-<title> ─────────────────
 echo "[4] slug pattern check"
-TODAY="$(date -u +%Y-%m-%d)"
+# Use local date (not UTC) — `gtm post draft` uses date.today() which is
+# local-time. Comparing against `date -u` was flaky between local→UTC midnight.
+TODAY="$(date +%Y-%m-%d)"
 check "slug starts with today's date" \
     "echo '$SLUG1' | grep -q '^${TODAY}-'"
 check "slug contains 'reddit'" \
