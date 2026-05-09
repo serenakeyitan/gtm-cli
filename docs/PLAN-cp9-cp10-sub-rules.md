@@ -1,5 +1,12 @@
 # CP9 + CP10 — sub-rule auto-fetch + submit gate
 
+> **Status: ✅ SHIPPED.** Both checkpoints landed on `main` on 2026-05-05
+> (PR #13 was the merge anchor; PR #14 was closed in-flight as its
+> content cascaded). 26 e2e checks. The auto-fetcher is now the
+> `gtm reddit fetch-sub-rules` command; the hard preflight gate runs on
+> every `gtm reddit submit` (override with `--no-preflight` or
+> `--override`). This file is preserved as the historical design record.
+
 **Why:** today, `gtm reddit preflight` returns PASS for any sub not in
 `gtm/data/reddit_sub_rules.yaml` (only `rule_found=False`). That means we
 can post to a brand-new sub with zero knowledge of its self-promo rule,

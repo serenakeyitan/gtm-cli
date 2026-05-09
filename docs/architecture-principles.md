@@ -11,8 +11,9 @@
 
 ```
 OLD (100% LLM — 175 API calls):
-  agent/scout: Claude decides which accounts to scan,
-               calls tools one by one, analyzes results = 175 turns
+  Claude decides which accounts to scan, calls tools one by one,
+  analyzes results = 175 turns. (This was `agent/scout`, deleted in
+  the agentic-redesign Phase 5.)
 
 NEW (5% LLM — 1 API call):
   twitter/user_tweets × 4 accounts    → deterministic, 0 API calls
@@ -108,3 +109,34 @@ HN:      1 submit/hr, 2/day, 30min cooldown
 ```
 
 **Rate limits are the moat.** Anyone can build a posting tool. But a tool that actively prevents your accounts from getting banned — that's the product.
+
+## 6. Two Front Ends, One Registry
+
+The same `Module` registry serves two distinct callers:
+
+- **CLI** (`gtm ...`) — interactive UX layer for humans. Multi-account selector prompts, force-override confirmations, JSON-vs-pretty output, git-backed output logger, browser-based auth. Lives in `gtm/cli.py`.
+- **MCP server** (`gtm mcp serve`) — typed tool surface for agents. Auto-generates 26 MCP tools from the registry, returns structured JSON `ModuleResult` per call, errors as JSON not exceptions. Lives in `gtm/mcp_server.py`.
+
+Both consume `gtm.sdk` (`run_module`, `run_strategy`). Neither wraps the other. They're peers.
+
+```python
+# Both of these go through the same registry → same module → same rate
+# limiter → same identity manager:
+
+# Human path (CLI)
+$ gtm reddit submit --sub SaaS --title "..." --as my_handle --dry-run
+
+# Agent path (MCP)
+mcp__gtm__reddit_submit({
+  "subreddit": "SaaS",
+  "title": "...",
+  "identity": "reddit:my_handle",
+  "dry_run": true
+})
+```
+
+**The agentic intelligence lives in markdown** — not Python. The agent reads `skills/voice/<platform>.md` to learn tone, `skills/workflows/<task>.md` to learn flow, `skills/decisions/safety-checks.md` to learn what to verify before posting. The skills library is the playbook; the MCP tools are the action surface; the registry is the implementation. Adding a new skill is a markdown file — no code change.
+
+This split is what lets a Claude Code session run a launch end-to-end without typing a `gtm` command and without writing any YAML — and lets a shell user with no agent run the same launch via the same registry.
+
+See [PLAN-claude-code-shape.md](./PLAN-claude-code-shape.md) for the redesign that established this shape.

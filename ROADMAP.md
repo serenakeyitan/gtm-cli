@@ -17,10 +17,13 @@
 | v0.2 Phase 2 | ✅ Done | Transform modules | 4/4 |
 | v0.2 Phase 3 | ✅ Done | DAG runner | 7/7 |
 | v0.2 Phase 4 | ✅ Done | Strategy-as-module | 3/3 |
-| v0.2 Phase 5 | ✅ Done | Multi-account | 0/7 |
+| v0.2 Phase 5 | ✅ Done | Multi-account | 7/7 |
 | v0.3 | ✅ Done | Intelligence (skill, generation, listening) | 7/7 |
+| **Launch workflow** | ✅ Done | `gtm launch / post / dashboard` (CP1–CP8, 221 e2e checks) | 8/8 |
+| **Preflight gate** | ✅ Done | `reddit fetch-sub-rules` + hard submit gate (CP9–CP10, 26 e2e checks) | 2/2 |
+| **Agentic redesign** | ✅ Done | SDK, MCP server, skills library, dead-code cleanup | 6/6 |
 | v0.4 | ⬜ | Growth Cloud (managed accounts/IPs) | 0/6 |
-| v0.5 | ⬜ | GitHub integration | 0/4 |
+| v0.5 | ⬜ | GitHub integration (PR-based content review) | 0/4 |
 | v1.0 | ⬜ | Public launch | 0/5 |
 | v2.0 | ⬜ | Ecosystem (plugins, marketplace, teams) | 0/7 |
 | v3.0 | ⬜ | Autonomous growth agent | 0/4 |
@@ -99,7 +102,7 @@ $ gtm traction
 
 ---
 
-## v0.2 — "Composable Module System" 🔧 IN PROGRESS
+## v0.2 — "Composable Module System" ✅ DONE
 
 > Every piece is a Lego block. Same blocks, different arrangement.
 > See [docs/architecture-principles.md](./docs/architecture-principles.md) for design details.
@@ -393,6 +396,104 @@ Want me to post these? I'll stagger them over 2 hours.
 ```
 
 **The key insight:** Claude Code + SKILL.md = better than any TUI we could build. The agent reads `--json` output, reasons about it, and suggests actions. We just need a smarter skill file.
+
+---
+
+## Launch workflow ✅ DONE
+
+> End-to-end campaign repo management: scaffold, draft, ship, sync engagement, render dashboard, deploy. Generalized for any user, not hardcoded to a single launch.
+
+<details>
+<summary>✅ 8/8 checkpoints completed (click to expand)</summary>
+
+- [x] CP1: launch directory model (`.gtm-launch.yaml`, `gtm launch init/link/info`)
+- [x] CP2: post frontmatter model + `gtm post list/status`
+- [x] CP3: `gtm post draft` (interactive create with voice template)
+- [x] CP4: `gtm post submit` (preflight + Playwright + image post)
+- [x] CP5: `gtm post sync` (engagement refresh + bot/OP filter)
+- [x] CP6: `gtm dashboard build` (render dashboard.html from posts)
+- [x] CP7: `gtm dashboard serve` + `deploy` (cloudflare/vercel)
+- [x] CP8: full integration e2e + LAUNCH-ONBOARDING.md (final CP)
+
+221 e2e checks across CP1–CP8. Plan: [docs/PLAN-launch-workflow.md](./docs/PLAN-launch-workflow.md). Walkthrough: [docs/LAUNCH-ONBOARDING.md](./docs/LAUNCH-ONBOARDING.md).
+
+</details>
+
+### 🎬 Showcase: "Your launch is a folder"
+
+```bash
+$ gtm launch init                          # scaffold .gtm-launch.yaml
+$ gtm post draft my-product \              # interactive draft
+    --channel "reddit r/SaaS" --direction launch
+$ gtm post submit 2026-05-06-reddit-r-saas-...  # preflight gate + submit
+$ gtm post sync                            # refresh score/comments
+$ gtm dashboard build && gtm dashboard deploy --provider cloudflare
+```
+
+**The key insight:** posts are markdown files with frontmatter. The dashboard is generated HTML. Git history IS the campaign history. No database, no SaaS dashboard, no lock-in.
+
+---
+
+## Preflight gate ✅ DONE
+
+> Hard gate on `gtm reddit submit`: if karma/age/sub rules say BORDERLINE or FAIL, the submit aborts unless overridden. Sub rules auto-fetch on demand.
+
+<details>
+<summary>✅ 2/2 checkpoints completed (click to expand)</summary>
+
+- [x] CP9: `gtm reddit fetch-sub-rules` — auto-fetch sidebar + meta into `gtm/data/reddit_sub_rules.yaml`. Manual entries preserved (source: manual).
+- [x] CP10: hard preflight gate on `gtm reddit submit`. PASS proceeds, BORDERLINE requires `--yes`, FAIL requires `--override`. `--no-preflight` opts out entirely (logged loudly).
+
+26 e2e checks. Plan: [docs/PLAN-cp9-cp10-sub-rules.md](./docs/PLAN-cp9-cp10-sub-rules.md).
+
+</details>
+
+### 🎬 Showcase: "No more posting blind"
+
+```
+$ gtm reddit submit --sub MachineLearning --title "..." --body "..."
+  preflight: BORDERLINE — comment_karma 92, sub min 100 (8% under threshold)
+  to proceed anyway: re-run with --yes
+```
+
+**The key insight:** the cost of a removed post (30+ days of identity damage) is much higher than the cost of typing `--yes` when you're sure. Default to caution.
+
+---
+
+## Agentic redesign ✅ DONE
+
+> Reshape gtm-cli from "CLI is the product" to "CLI for humans, MCP server for agents, skills library is the playbook." Backed by the same registry; no logic duplication.
+
+<details>
+<summary>✅ 6/6 phases completed (click to expand)</summary>
+
+- [x] **Phase 1**: extract `gtm.sdk` facade — `run_module`, `run_strategy`, sync wrappers, registry exposed at package root.
+- [x] **Phase 2**: MCP server (`gtm mcp serve`) — 26 typed tools auto-generated from `Module.param_schema`. Errors return as JSON, not exceptions.
+- [x] **Phase 3**: markdown skills library (`skills/` — 12 files, ~1500 lines). Voice rules, workflow playbooks, judgment skills, real-removal reference.
+- [x] **Phase 4**: rewrite `SKILL.md` + `AGENTS.md` to teach MCP tools and load order, drop bash recipes.
+- [x] **Phase 5**: delete the 6 prompt-wrapping legacy `gtm/modules/agents/*.py` (synthesize stays — real LLM ranker with deterministic fallback).
+- [x] **Phase 6**: codebase cleanup — 7 dead `gtm/agents/*.py` files dropped, dead tests pruned, README rewrite, version bump 0.1.0 → 0.2.0.
+
+Plan: [docs/PLAN-claude-code-shape.md](./docs/PLAN-claude-code-shape.md). MCP setup: [docs/mcp-quickstart.md](./docs/mcp-quickstart.md).
+
+</details>
+
+### 🎬 Showcase: "Two front ends, one registry"
+
+```bash
+# As a CLI (humans)
+$ gtm reddit submit --sub SaaS --title "..." --dry-run
+$ gtm traction
+$ gtm dashboard deploy
+
+# As an MCP server (agents) — register in .mcp.json
+$ gtm mcp serve
+# → 26 typed tools: mcp__gtm__hn_search, mcp__gtm__reddit_submit, ...
+# → agent reads skills/README.md, loads voice/<platform>.md, runs
+#   safety-checks.md, calls dry_run, gets approval, posts.
+```
+
+**The key insight:** the agent isn't a thin layer on top of a CLI. It's a peer consumer of the same SDK. The CLI handles interactive UX (multi-account prompts, force-override confirms, JSON-vs-pretty output). The MCP server handles structured tool calls. Both share the registry, rate limiter, and identity manager.
 
 ---
 

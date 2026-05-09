@@ -9,6 +9,15 @@ If you'd rather read the design rationale first, see
 example, see [atf-launch](https://github.com/unispark-inc/atf-launch) — the
 reference launch directory this workflow was built around.
 
+> **Want to drive this from Claude Code instead of typing commands?** The
+> CLI is the fastest path for a one-time launch and is what this guide
+> uses. For agent-driven runs, register the [MCP server](mcp-quickstart.md)
+> in `.mcp.json` and the agent can call the same operations as typed
+> tools. The agent reads [`skills/workflows/show-hn-launch.md`](../skills/workflows/show-hn-launch.md)
+> or [`skills/workflows/reddit-organic-seed.md`](../skills/workflows/reddit-organic-seed.md)
+> for the playbook. Same registry, same rate limiter, same output —
+> different driver.
+
 ## What is a "launch directory"?
 
 Any directory containing a `.gtm-launch.yaml` marker file. That file pins the

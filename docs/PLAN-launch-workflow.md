@@ -1,6 +1,13 @@
 # Plan: Launch Workflow + Dashboard Integration
 
-**Status:** drafted 2026-04-28, not yet started.
+> **Status: ✅ SHIPPED.** This plan was drafted 2026-04-28 and shipped as
+> CP1–CP8 — all 8 checkpoints landed on `main` via cascade-FF on
+> 2026-05-05 (PR #5 was the merge anchor; PRs #6–#12 were closed
+> in-flight as their content cascaded). 221 e2e checks. For the
+> user-facing walkthrough, see [LAUNCH-ONBOARDING.md](LAUNCH-ONBOARDING.md).
+> This file is preserved as the historical design record.
+
+**Original status:** drafted 2026-04-28, not yet started.
 **Goal:** make gtm-cli the single tool for managing a launch tracking repo end-to-end (draft → preflight → submit → engagement sync → dashboard render → deploy), generalized for any user, not hardcoded to atf-launch.
 
 ## Why now

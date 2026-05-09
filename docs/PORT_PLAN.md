@@ -1,5 +1,14 @@
 # Port Plan: openclaw-growth-pipeline → gtm-cli
 
+> **Status: ✅ COMPLETED 2026-04-25** (merged via PR #1, squash commit
+> `ec115f5`). The 8-checkpoint port from `growth-sop-pipeline` to
+> `gtm-cli` shipped with a 61-test e2e suite (`tests/e2e/test-port-checkpoint-*.sh`).
+> Some references in this document point to legacy code that was later
+> deleted in the agentic-redesign Phase 5 (`gtm/modules/agents/scout.py`,
+> `promote_*.py`, `builder.py`, `tester.py`, `novelty_check.py`) and OSS
+> cleanup pass (`gtm/agents/*.py` for the same set). This file is
+> preserved as the historical design record.
+
 **Date:** 2026-04-24
 **Source:** `serenakeyitan/growth-sop-pipeline` branch `wip/multi-account-engagement-pre-archive` (already pushed, safety snapshot)
 **Target:** this repo (`serenakeyitan/gtm-cli`)
