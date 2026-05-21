@@ -130,14 +130,23 @@ class TwitterClient:
 
     # ── Public API ────────────────────────────────────────────────────
 
-    async def search(self, query: str, count: int = 20) -> list[dict[str, Any]]:
-        """Search tweets by query. Returns list of dicts."""
+    async def search(
+        self, query: str, count: int = 20, product: str = "Latest"
+    ) -> list[dict[str, Any]]:
+        """Search tweets by query. Returns list of dicts.
+
+        product: "Latest" (newest, default — back-compat) or "Top"
+        (highest-engagement). Use "Top" when you want trending tweets
+        rather than the most-recent ones.
+        """
+        if product not in ("Latest", "Top"):
+            product = "Latest"
         await self.ensure_logged_in()
         await self._throttle()
         try:
             results = await self._retry_on_rate_limit(
-                f"search({query!r})",
-                lambda: self._client.search_tweet(query, product="Latest", count=count),
+                f"search({query!r}, {product})",
+                lambda: self._client.search_tweet(query, product=product, count=count),
             )
             return [_tweet_to_dict(t) for t in results]
         except TooManyRequests as e:
