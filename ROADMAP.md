@@ -649,12 +649,13 @@ $ gtm auto --strategy continuous-gtm --budget 50-posts/week
 
 | Metric | Value |
 |---|---|
-| Commits | 33 |
-| Lines of Python | ~12,000 |
-| Composable modules | 23 |
+| Commits | 126+ |
+| Lines of Python | ~15,000 |
+| Composable modules | 35 (incl. strategies) |
+| MCP tools | 26 typed tools via `gtm mcp serve` |
 | Platforms | 3 (Twitter, Reddit, HN) |
-| Agents | 6 (scout, novelty, builder, tester, promoter, hn_promoter) |
-| Strategies | 7 (5 examples + 2 local routes) |
-| Prompts | 7 (6 agent prompts + 1 style guide) |
-| Codex reviews | 33 commits reviewed |
-| Codex findings fixed | 42 total |
+| Skills | 12 markdown skill files in `skills/` |
+| Strategies | 8 examples + custom local routes |
+| Prompts | 2 (engagement_loop + style_guide) |
+| E2E test suites | 22 scripts + 3 pytest files |
+| Codex reviews | 126 commits auto-reviewed |
