@@ -10,13 +10,27 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+USER_PROMPTS_DIR = Path.home() / ".config" / "gtm" / "prompts"
 
 
 def load_prompt(name: str) -> str:
-    """Load a system prompt from the prompts/ directory."""
+    """Load a system prompt.
+
+    Search order:
+    1. ~/.config/gtm/prompts/<name>.md  (user-local overrides, private strategy)
+    2. <package>/prompts/<name>.md      (bundled defaults, public)
+
+    This lets users keep their proprietary prompts out of the gtm-cli repo
+    while still benefiting from upstream prompt updates as a fallback.
+    """
+    user_path = USER_PROMPTS_DIR / f"{name}.md"
+    if user_path.exists():
+        return user_path.read_text()
     path = PROMPTS_DIR / f"{name}.md"
     if not path.exists():
-        raise FileNotFoundError(f"Prompt not found: {path}")
+        raise FileNotFoundError(
+            f"Prompt '{name}' not found in {USER_PROMPTS_DIR} or {PROMPTS_DIR}"
+        )
     return path.read_text()
 
 

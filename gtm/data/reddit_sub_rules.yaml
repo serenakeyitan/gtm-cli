@@ -1,32 +1,3 @@
-# Reddit per-subreddit posting rules.
-#
-# Reddit doesn't expose these via API — they're scraped from sidebar text + lived
-# experience. Edit by hand as you learn more (e.g. after a removal), or auto-fetch
-# with `gtm reddit fetch-sub-rules <sub>`.
-#
-# Schema per sub:
-#   # Karma / age gates (manual; null = no rule)
-#   min_total_karma:     minimum total karma to attempt posting
-#   min_link_karma:      minimum link karma
-#   min_comment_karma:   minimum comment karma
-#   min_age_days:        minimum account age in days
-#
-#   # Free text + flags (manual)
-#   notes:               observed gotchas, what kind of post works
-#   permanent_skip:      true if mod-removed; never retry from any account
-#
-#   # Auto-fetched fields (filled by `gtm reddit fetch-sub-rules`)
-#   last_fetched:        ISO8601 timestamp of the last fetch
-#   subscribers:         current subscriber count
-#   submission_type:     'any' | 'self' | 'link' (what the sub allows)
-#   flair_required_auto: true if automod requires a flair (auto-detected)
-#   source:              'manual' (curated) or 'auto' (fetcher-only)
-#
-# Verdict logic (used by `gtm reddit preflight`):
-#   FAIL       — at least one rule is violated
-#   BORDERLINE — passes by <= 20% margin on any rule (e.g. 110 karma when min is 100)
-#   PASS       — comfortably above all minimums
-
 subs:
   ClaudeAI:
     min_total_karma: null
@@ -145,3 +116,42 @@ subs:
     subscribers: 117799
     submission_type: self
     flair_required_auto: true
+  AIAgents:
+    min_total_karma: null
+    min_link_karma: null
+    min_comment_karma: null
+    min_age_days: null
+    notes: '109k subs · flair required (auto-detected) · rules: Substance Required; No Naked Self-Promotion;
+      Use Flairs; Be Specific; Cite Sources · about: AI Agents may be one of the primary conceptual frameworks
+      for humanity’s deployment of applied AI.'
+    permanent_skip: false
+    last_fetched: '2026-05-23T01:12:44Z'
+    source: auto
+    subscribers: 109139
+    submission_type: any
+    flair_required_auto: true
+  slackdev:
+    min_total_karma: null
+    min_link_karma: null
+    min_comment_karma: null
+    min_age_days: null
+    notes: '72 subs · about: This sub is about developers who want to build Slack apps.'
+    permanent_skip: false
+    last_fetched: '2026-05-23T01:12:45Z'
+    source: auto
+    subscribers: 72
+    submission_type: any
+    flair_required_auto: false
+  SideProject:
+    min_total_karma: null
+    min_link_karma: null
+    min_comment_karma: null
+    min_age_days: null
+    notes: '723k subs · about: r/SideProject is a subreddit for sharing and receiving constructive feedback
+      on side projects.'
+    permanent_skip: false
+    last_fetched: '2026-05-23T01:12:50Z'
+    source: auto
+    subscribers: 723448
+    submission_type: any
+    flair_required_auto: false

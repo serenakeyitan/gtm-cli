@@ -445,8 +445,13 @@ class PlaywrightRedditClient:
         subreddit: str,
         title: str,
         selftext: str,
+        flair_text: str | None = None,
     ) -> dict[str, Any]:
         """Submit a text post to a subreddit via the browser.
+
+        Args:
+            flair_text: Case-insensitive substring to match a flair label.
+                Required for subreddits that enforce flair.
 
         Returns dict with: url, subreddit, title, success.
         """
@@ -472,7 +477,7 @@ class PlaywrightRedditClient:
                 "Submit page loaded (HTTP %s). Current URL: %s",
                 resp.status if resp else "?", page.url,
             )
-            return await self._submit_new_reddit(page, subreddit, title, selftext)
+            return await self._submit_new_reddit(page, subreddit, title, selftext, flair_text=flair_text)
 
         except RedditPostError:
             raise
@@ -568,7 +573,8 @@ class PlaywrightRedditClient:
         }
 
     async def _submit_new_reddit(
-        self, page, subreddit: str, title: str, selftext: str
+        self, page, subreddit: str, title: str, selftext: str,
+        flair_text: str | None = None,
     ) -> dict[str, Any]:
         """Submit via new Reddit UI.
 
@@ -576,6 +582,11 @@ class PlaywrightRedditClient:
         ``contenteditable`` divs instead of plain ``<textarea>`` inputs.
         The title field is a ``<div>`` inside a ``<shreddit-composer>``
         component, and the body is identified by ``aria-label``.
+
+        Args:
+            flair_text: Case-insensitive substring to match against available
+                flair labels. The first matching flair option is selected.
+                Pass None to skip flair selection.
         """
         log.info("New Reddit submit: checking page state...")
 
@@ -713,6 +724,86 @@ class PlaywrightRedditClient:
             await page.keyboard.type(selftext, delay=10)
             await page.wait_for_timeout(500)
             log.info("New Reddit submit: body filled.")
+
+        # ── Flair ─────────────────────────────────────────────────────
+        if flair_text:
+            log.info("New Reddit submit: selecting flair %r...", flair_text)
+            try:
+                # Click the "Add flair" / flair button to open the picker.
+                flair_btn_selectors = [
+                    'button:has-text("Add flair")',
+                    'button[aria-label*="flair"]',
+                    'button[aria-label*="Flair"]',
+                    'button.flair-button',
+                    '*[data-testid="post-flair-button"]',
+                    'faceplate-button:has-text("Flair")',
+                ]
+                flair_btn = None
+                for sel in flair_btn_selectors:
+                    loc = page.locator(sel).first
+                    try:
+                        if await loc.is_visible(timeout=2000):
+                            flair_btn = loc
+                            log.info("Flair button matched: %s", sel)
+                            break
+                    except Exception:
+                        continue
+                if flair_btn:
+                    await flair_btn.click()
+                    await page.wait_for_timeout(1500)
+                    # Find a flair option that matches flair_text (case-insensitive).
+                    flair_option_selectors = [
+                        f'li:has-text("{flair_text}")',
+                        f'button:has-text("{flair_text}")',
+                        f'div[role="option"]:has-text("{flair_text}")',
+                        f'span:has-text("{flair_text}")',
+                    ]
+                    selected = False
+                    for sel in flair_option_selectors:
+                        opts = page.locator(sel)
+                        count = await opts.count()
+                        for i in range(count):
+                            opt = opts.nth(i)
+                            try:
+                                text = (await opt.text_content() or "").strip()
+                                if flair_text.lower() in text.lower():
+                                    await opt.click()
+                                    log.info("Selected flair option: %r", text)
+                                    selected = True
+                                    await page.wait_for_timeout(800)
+                                    break
+                            except Exception:
+                                continue
+                        if selected:
+                            break
+                    if not selected:
+                        log.warning(
+                            "Could not find flair option matching %r — continuing without flair",
+                            flair_text,
+                        )
+                    # Click Apply/Save flair button if present.
+                    apply_selectors = [
+                        'button:has-text("Apply")',
+                        'button:has-text("Save")',
+                        'button:has-text("Done")',
+                    ]
+                    for sel in apply_selectors:
+                        loc = page.locator(sel).first
+                        try:
+                            if await loc.is_visible(timeout=2000):
+                                await loc.click()
+                                log.info("Clicked flair apply button: %s", sel)
+                                await page.wait_for_timeout(800)
+                                break
+                        except Exception:
+                            continue
+                else:
+                    log.warning(
+                        "No flair button found on r/%s — continuing without flair",
+                        subreddit,
+                    )
+            except Exception as exc:
+                log.warning("Flair selection failed (%s) — continuing without flair", exc)
 
         # ── Submit ────────────────────────────────────────────────────
         log.info("New Reddit submit: clicking Post button...")
@@ -1098,6 +1189,105 @@ class PlaywrightRedditClient:
             raise RedditPostError(
                 f"API submit failed for r/{subreddit}: {e}"
             ) from e
+        finally:
+            await page.close()
+
+    async def post_comment(
+        self,
+        post_url: str,
+        text: str,
+    ) -> dict[str, Any]:
+        """Post a top-level comment on an existing Reddit post via the API.
+
+        Uses the same token_v2 cookie strategy as ``submit_api_post``.
+
+        Parameters
+        ----------
+        post_url : str
+            Full URL of the Reddit post to comment on.
+        text : str
+            Comment body (markdown).
+        """
+        await self.ensure_logged_in()
+        await self._throttle()
+
+        post_id = self._extract_post_id(post_url)
+        if not post_id:
+            raise RedditPostError(f"Could not extract post ID from URL: {post_url}")
+
+        page = await self._context.new_page()
+        try:
+            await page.goto(
+                "https://www.reddit.com/", wait_until="commit", timeout=30000,
+            )
+            await page.wait_for_timeout(3000)
+
+            cookies = await self._context.cookies()
+            token = None
+            for c in cookies:
+                if c["name"] == "token_v2" and ".reddit.com" in c.get("domain", ""):
+                    token = c["value"]
+                    break
+
+            if not token:
+                raise RedditAuthError(
+                    "token_v2 cookie not found. Session may be expired."
+                )
+
+            result = await page.evaluate(
+                """async ([postId, body, token]) => {
+                    const resp = await fetch('https://oauth.reddit.com/api/comment', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'User-Agent': 'gtm-cli/0.2.0',
+                        },
+                        body: new URLSearchParams({
+                            thing_id: 't3_' + postId,
+                            text: body,
+                            api_type: 'json',
+                        }).toString(),
+                    });
+                    const status = resp.status;
+                    const data = await resp.json();
+                    return { status, data };
+                }""",
+                [post_id, text, token],
+            )
+
+            status = result.get("status", 0)
+            data = result.get("data", {})
+            errors = data.get("json", {}).get("errors", [])
+
+            if status == 429:
+                raise RedditRateLimitError("Reddit API rate limit (429) posting comment")
+            if errors:
+                raise RedditPostError(f"Reddit API errors posting comment: {errors}")
+
+            # Extract the comment URL from the response
+            things = data.get("json", {}).get("data", {}).get("things", [])
+            comment_url = ""
+            comment_id = ""
+            if things:
+                c_data = things[0].get("data", {})
+                comment_id = c_data.get("id", "")
+                permalink = c_data.get("permalink", "")
+                if permalink:
+                    comment_url = f"https://www.reddit.com{permalink}"
+
+            log.info("Commented on %s: %s", post_url, comment_url or comment_id)
+            return {
+                "url": comment_url,
+                "comment_id": comment_id,
+                "post_url": post_url,
+                "success": True,
+            }
+
+        except (RedditPostError, RedditRateLimitError, RedditAuthError):
+            raise
+        except Exception as e:
+            raise RedditPostError(f"Comment failed on {post_url}: {e}") from e
         finally:
             await page.close()
 

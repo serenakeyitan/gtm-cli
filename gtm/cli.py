@@ -1100,8 +1100,10 @@ def reddit_search(query, sub, count, json_output):
 @click.option("--no-preflight", is_flag=True,
               help="Skip the preflight rule gate entirely. Last-resort escape "
                    "hatch — prefer --override <reason> so the bypass is recorded.")
+@click.option("--flair", "flair_text", default="",
+              help="Case-insensitive flair label to select (required for some subs).")
 def reddit_submit(as_identity, sub, title, body, url, generate_prompt,
-                  dry_run, force, strict, override_reason, no_preflight):
+                  dry_run, force, strict, override_reason, no_preflight, flair_text):
     """Submit a post to a subreddit. Use --generate to draft content."""
     if not no_preflight and as_identity:
         from gtm.modules.submit_gate import evaluate_submit, format_gate_summary
@@ -1138,7 +1140,48 @@ def reddit_submit(as_identity, sub, title, body, url, generate_prompt,
         console.print("[red]Provide --title or use --generate[/red]")
         sys.exit(1)
     asyncio.run(_do_post("reddit", "post", body, as_identity, dry_run, force, False,
-                          subreddit=sub, title=title, url=url))
+                          subreddit=sub, title=title, url=url,
+                          flair_text=flair_text or None))
+
+
+@reddit.command("comment")
+@click.option("--as", "as_identity", required=True, help="Identity to use")
+@click.option("--url", "post_url", required=True, help="Full URL of the Reddit post to comment on")
+@click.option("--body", required=True, help="Comment text (markdown)")
+@click.option("--dry-run", is_flag=True, help="Print what would be posted without posting")
+def reddit_comment(as_identity, post_url, body, dry_run):
+    """Post a top-level comment on an existing Reddit post."""
+    if dry_run:
+        console.print("\n[dim]DRY RUN — nothing will be posted[/dim]")
+        console.print(f"  Account:  {as_identity}")
+        console.print(f"  Post URL: {post_url}")
+        console.print(f"  Comment:  {body}")
+        return
+
+    from gtm.identity.manager import IdentityManager
+    from gtm.platforms.reddit.client import get_reddit_browser_client_for_identity
+
+    mgr = IdentityManager()
+    identity = mgr.get(f"reddit:{as_identity}") or mgr.get(as_identity)
+    if identity is None:
+        console.print(f"[red]Identity not found: {as_identity}[/red]")
+        sys.exit(1)
+
+    async def _run():
+        client = get_reddit_browser_client_for_identity(identity.name)
+        try:
+            result = await client.post_comment(post_url, body)
+            return result
+        finally:
+            await client.close()
+
+    result = asyncio.run(_run())
+    if result.get("success"):
+        comment_url = result.get("url") or "(no URL returned)"
+        console.print(f"✅ Comment posted!\n   {comment_url}")
+    else:
+        console.print(f"[red]Comment failed: {result}[/red]")
+        sys.exit(1)
 
 
 @reddit.command("prefill")

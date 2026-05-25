@@ -217,7 +217,28 @@ async def _execute_agent_step(
 
 
 def _build_agent_config(identities_dir: Path) -> Any:
-    """Build a config object with attributes the legacy agents expect."""
+    """Build a config object with attributes the agents expect.
+
+    Reads ~/.config/gtm/config.yaml so user-supplied seed accounts, target
+    subreddits, GitHub owner, and engagement thresholds actually flow into
+    the agent prompts. Falls back to safe defaults when keys are missing.
+    """
+    from gtm.config import CONFIG_PATH, GrowthConfig
+
+    user_cfg = GrowthConfig.load()
+    raw: dict[str, Any] = {}
+    if CONFIG_PATH.exists():
+        import yaml
+        try:
+            with open(CONFIG_PATH) as f:
+                raw = yaml.safe_load(f) or {}
+        except Exception:
+            raw = {}
+
+    twitter_raw = raw.get("twitter", {}) if isinstance(raw.get("twitter"), dict) else {}
+    reddit_raw = raw.get("reddit", {}) if isinstance(raw.get("reddit"), dict) else {}
+    github_raw = raw.get("github", {}) if isinstance(raw.get("github"), dict) else {}
+    models_raw = raw.get("models", {}) if isinstance(raw.get("models"), dict) else {}
 
     class _TwitterConfig:
         def __init__(self):
@@ -229,21 +250,23 @@ def _build_agent_config(identities_dir: Path) -> Any:
                     if d.is_dir() and not d.name.startswith("_") and cp.exists():
                         self.cookie_path = str(cp)
                         break
-            self.seed_accounts = []
-            self.seed_company_accounts = []
-            self.request_delay = 8.0
-            self.min_engagement = {"likes": 1000, "retweets": 200}
-            self.lookback_hours = 24
+            self.seed_accounts = user_cfg.twitter_seed_accounts or twitter_raw.get("seed_accounts", [])
+            self.seed_company_accounts = twitter_raw.get("seed_company_accounts", [])
+            self.request_delay = twitter_raw.get("request_delay", 8.0)
+            self.min_engagement = twitter_raw.get("min_engagement", {"likes": 1000, "retweets": 200})
+            self.lookback_hours = twitter_raw.get("lookback_hours", 24)
 
     class _RedditConfig:
         def __init__(self):
-            self.credentials_path = ""
-            self.user_agent = "gtm-cli/0.1"
-            self.target_subreddits = ["SaaS", "startups", "programming"]
+            self.credentials_path = reddit_raw.get("credentials_path", "")
+            self.user_agent = reddit_raw.get("user_agent", "gtm-cli/0.1")
+            self.target_subreddits = reddit_raw.get("target_subreddits", ["SaaS", "startups", "programming"])
             self.session_dir = str(identities_dir / "reddit")
-            self.post_stagger_seconds = 15
-            self.post_stagger_hours = 0      # Legacy field (promoter reads this)
-            self.max_subreddits_per_idea = 3
+            self.post_stagger_seconds = reddit_raw.get("post_stagger_seconds", 15)
+            self.post_stagger_hours = reddit_raw.get("post_stagger_hours", 0)
+            self.max_subreddits_per_idea = reddit_raw.get("max_subreddits_per_idea", 3)
+            # User's past Reddit posts that demonstrate the voice — used by promoter
+            self.style_references = reddit_raw.get("style_references", [])
 
     class _HNConfig:
         def __init__(self):
@@ -251,20 +274,25 @@ def _build_agent_config(identities_dir: Path) -> Any:
 
     class _ModelsConfig:
         def __init__(self):
-            self.scout = "claude-sonnet-4-20250514"
-            self.novelty = "claude-sonnet-4-20250514"
-            self.builder = "claude-sonnet-4-20250514"
-            self.tester = "claude-sonnet-4-20250514"
-            self.promoter = "claude-sonnet-4-20250514"
-            self.hn_promoter = "claude-sonnet-4-20250514"
-            self.twitter_promoter = "claude-sonnet-4-20250514"
-            self.engagement_loop = "claude-sonnet-4-20250514"
+            default = models_raw.get("default", "claude-sonnet-4-20250514")
+            self.scout = models_raw.get("scout", default)
+            self.novelty = models_raw.get("novelty", default)
+            self.builder = models_raw.get("builder", default)
+            self.tester = models_raw.get("tester", default)
+            self.promoter = models_raw.get("promoter", default)
+            self.hn_promoter = models_raw.get("hn_promoter", default)
+            self.twitter_promoter = models_raw.get("twitter_promoter", default)
+            self.engagement_loop = models_raw.get("engagement_loop", default)
 
     class _GitHubConfig:
         def __init__(self):
             import os
-            self.owner = os.environ.get("GITHUB_OWNER", "")
-            self.token = os.environ.get("GITHUB_TOKEN", "")
+            self.owner = (
+                os.environ.get("GITHUB_OWNER")
+                or github_raw.get("owner", "")
+            )
+            self.token = os.environ.get("GITHUB_TOKEN", github_raw.get("token", ""))
+            self.commit_email = github_raw.get("commit_email", "")
 
     class _Config:
         def __init__(self):

@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from gtm.platforms.base import (
-    EngageResult,
     HealthStatus,
     Platform,
     PostResult,
@@ -65,6 +64,7 @@ class RedditPlatform(Platform):
         subreddit = kwargs.get("subreddit", "")
         title = kwargs.get("title", "")
         url = kwargs.get("url", "")
+        flair_text = kwargs.get("flair_text") or kwargs.get("flair", "")
 
         if not subreddit:
             return PostResult(success=False, error="--sub required for Reddit posts")
@@ -78,8 +78,10 @@ class RedditPlatform(Platform):
                     subreddit, title, url=url, kind="link"
                 )
             else:
-                result = await client.submit_api_post(
-                    subreddit, title, selftext=content, kind="self"
+                # Use browser-based submit so flair can be selected via UI
+                # (API submit requires a flair_id which we don't always have).
+                result = await client.submit_post(
+                    subreddit, title, content, flair_text=flair_text or None
                 )
             return PostResult(
                 success=True,
