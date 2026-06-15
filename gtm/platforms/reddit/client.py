@@ -364,50 +364,94 @@ class PlaywrightRedditClient:
             except Exception:
                 continue
 
+        # Let the composer settle (Reddit's editor mounts async after the
+        # network is idle; clicking too early hits invisible/unmounted nodes).
+        try:
+            await page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(1200)
+
+        async def _fill_field(loc, text: str, *, what: str) -> bool:
+            """Robustly fill a title/body field (textarea, input, or
+            contenteditable). Scrolls into view and waits for visibility so
+            we never click an off-screen/unmounted node."""
+            try:
+                await loc.scroll_into_view_if_needed(timeout=3000)
+            except Exception:
+                pass
+            try:
+                await loc.wait_for(state="visible", timeout=5000)
+            except Exception:
+                log.warning("prefill: %s field never became visible", what)
+                return False
+            # Prefer .fill() for real form controls (atomic, no per-key races).
+            try:
+                tag = (await loc.evaluate("el => el.tagName")).lower()
+            except Exception:
+                tag = ""
+            try:
+                if tag in ("textarea", "input"):
+                    await loc.fill(text)
+                else:
+                    # contenteditable (Lexical): focus, then type.
+                    await loc.click()
+                    await page.wait_for_timeout(150)
+                    await page.keyboard.type(text, delay=8)
+                log.info("prefill: %s filled", what)
+                return True
+            except Exception as e:
+                log.warning("prefill: %s fill failed: %s", what, e)
+                return False
+
         # ── Title ─────────────────────────────────────────────────────
+        # Current Reddit: a faceplate/shreddit textarea, or a labelled
+        # contenteditable. Try real controls first; only use a positional
+        # contenteditable fallback that is explicitly the title (index 0 AND
+        # NOT the body editor, which carries slot="editor").
         title_selectors = [
-            'textarea[placeholder*="Title"]',
-            'textarea[placeholder*="title"]',
-            'input[aria-label*="Title"]',
-            'div[contenteditable="true"][aria-label*="Title"]',
-            'shreddit-composer textarea',
+            'textarea[name="title"]',
+            'textarea[placeholder*="Title" i]',
+            'textarea[aria-label*="Title" i]',
+            'input[aria-label*="Title" i]',
             'faceplate-textarea-input textarea',
+            'shreddit-composer textarea',
+            'div[contenteditable="true"][aria-label*="Title" i]',
         ]
         title_el = None
         for sel in title_selectors:
             loc = page.locator(sel).first
             try:
-                if await loc.is_visible(timeout=2000):
+                if await loc.count() > 0 and await loc.is_visible(timeout=1500):
                     title_el = loc
                     break
             except Exception:
                 continue
         if title_el is None:
-            ce_divs = page.locator('div[contenteditable="true"]')
-            if await ce_divs.count() > 0:
-                title_el = ce_divs.first
+            # Last resort: a contenteditable that is NOT the body editor.
+            ce = page.locator('div[contenteditable="true"]:not([slot="editor"])').first
+            if await ce.count() > 0:
+                title_el = ce
         if title_el is not None:
-            await title_el.click()
-            await page.wait_for_timeout(200)
-            await page.keyboard.type(title, delay=20)
-            await page.wait_for_timeout(300)
-            log.info("prefill: title filled")
+            await _fill_field(title_el, title, what="title")
         else:
             log.warning("prefill: title input not found — paste manually")
 
         # ── Body ──────────────────────────────────────────────────────
+        # The Lexical editor is the contenteditable with slot="editor".
         body_selectors = [
-            'div[aria-label="Post body text field"]',
-            'div[aria-label="Optional Body text field"]',
+            'div[slot="editor"][contenteditable="true"]',
+            'div[aria-label="Post body text field" i]',
+            'div[aria-label*="Body text field" i]',
             'div[contenteditable="true"][role="textbox"]',
-            'div[role="textbox"]',
-            'textarea[placeholder*="Text"]',
+            'div[data-lexical-editor="true"]',
+            'textarea[placeholder*="Text" i]',
         ]
         body_el = None
         for sel in body_selectors:
             loc = page.locator(sel).first
             try:
-                if await loc.is_visible(timeout=2000):
+                if await loc.count() > 0 and await loc.is_visible(timeout=1500):
                     body_el = loc
                     break
             except Exception:
@@ -417,10 +461,7 @@ class PlaywrightRedditClient:
             if await ce_divs.count() >= 2:
                 body_el = ce_divs.nth(1)
         if body_el is not None:
-            await body_el.click()
-            await page.wait_for_timeout(200)
-            await page.keyboard.type(selftext, delay=10)
-            log.info("prefill: body filled")
+            await _fill_field(body_el, selftext, what="body")
         else:
             log.warning("prefill: body input not found — paste manually")
 
