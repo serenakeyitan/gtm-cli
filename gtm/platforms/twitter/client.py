@@ -176,8 +176,24 @@ class TwitterClient:
         except (Unauthorized, BadRequest) as e:
             raise TwitterAuthError(f"Auth error on get_user_tweets({username}): {e}") from e
         except KeyError as e:
-            log.warning("No tweet entries for @%s (KeyError: %s) — skipping", username, e)
-            return []
+            # A KeyError here is ambiguous: it can mean the timeline is genuinely
+            # empty (twikit raises on missing entry containers), OR it can mean
+            # twikit failed to PARSE a tweet/user field (e.g. 'withheld_in_countries'
+            # when the upstream fork loses its .get() patch after a venv rebuild).
+            # The second case is a BUG that must fail LOUD — silently returning []
+            # made the scout report '0 tweets' for every account for 2 weeks while
+            # actually blind. Only treat known empty-timeline keys as "no tweets".
+            key = str(e).strip("'\"")
+            EMPTY_TIMELINE_KEYS = {"entries", "instructions", "timeline", "data"}
+            if key in EMPTY_TIMELINE_KEYS:
+                log.info("No tweet entries for @%s (empty timeline: %s)", username, e)
+                return []
+            # Anything else = a twikit parse bug. Do NOT pretend the account is empty.
+            raise TwitterClientError(
+                f"twikit parse error on @{username} (KeyError: {e}) — likely a lost "
+                f"twikit patch (e.g. withheld_in_countries). This is a BUG, not an "
+                f"empty account. Re-apply the twikit patch."
+            ) from e
         except Exception as e:
             raise TwitterClientError(f"get_user_tweets({username}) failed: {e}") from e
 
