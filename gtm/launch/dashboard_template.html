@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>atf-launch</title>
+    <title>{{TITLE}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -222,7 +222,7 @@ function PostRow({ post, daysToLaunch }) {
 }
 
 function Dashboard() {
-  const [activeProduct, setActiveProduct] = useState('first-tree');
+  const [activeProduct, setActiveProduct] = useState(PRODUCTS[0] ? PRODUCTS[0].key : null);
   const [filterDirection, setFilterDirection] = useState('all');
   const [expandedRemoved, setExpandedRemoved] = useState({}); // { [groupKey]: true }
   const toggleRemoved = (k) => setExpandedRemoved((prev) => ({ ...prev, [k]: !prev[k] }));
@@ -300,10 +300,10 @@ function Dashboard() {
         <header className="flex items-end justify-between gap-6 border-b border-zinc-900 pb-6">
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-2">launch tracker</div>
-            <h1 className="text-3xl font-medium tracking-tight text-zinc-100">atf-launch</h1>
+            <h1 className="text-3xl font-medium tracking-tight text-zinc-100">{{TITLE}}</h1>
           </div>
           <div className="text-right text-xs text-zinc-500">
-            <div>agent-team-foundation</div>
+            <div>{{SUBTITLE}}</div>
             <div className="tabular-nums">{TODAY}</div>
           </div>
         </header>
