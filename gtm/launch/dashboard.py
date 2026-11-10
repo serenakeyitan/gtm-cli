@@ -15,6 +15,8 @@ the only dependency is what the launch package already pulls in (PyYAML).
 
 from __future__ import annotations
 
+import html
+
 import datetime as _datetime_mod
 import json
 from datetime import datetime, timezone
@@ -197,6 +199,10 @@ def build_dashboard(launch: LaunchDir, today: Optional[str] = None) -> str:
     products = launch.products or _DEFAULT_PRODUCTS
 
     out = template
+    out = out.replace("{{TITLE}}", html.escape(launch.path.name))
+    # `dashboard.subtitle` in .gtm-launch.yaml; unset keeps the original label.
+    subtitle = launch.dashboard_config.get("subtitle") or "agent-team-foundation"
+    out = out.replace("{{SUBTITLE}}", html.escape(str(subtitle)))
     out = out.replace("{{TODAY}}", today or _today_utc())
     out = out.replace("{{DIRECTIONS_JSON}}", _json_dump(directions))
     out = out.replace("{{PRODUCTS_JSON}}", _json_dump(products))
